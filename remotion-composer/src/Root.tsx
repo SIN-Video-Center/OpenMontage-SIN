@@ -127,9 +127,11 @@ const calculateMetadata: CalculateMetadataFunction<ExplainerProps> = async ({
   if (cuts.length === 0) {
     return { durationInFrames: 30 * 60 };
   }
-  const lastEnd = Math.max(...cuts.map((c) => c.out_seconds || 0));
+  // Calculate total duration by summing cut durations (out_seconds - in_seconds)
+  // Each cut's in_seconds/out_seconds are RELATIVE to that cut, not absolute.
+  const totalDuration = cuts.reduce((acc, c) => acc + ((c.out_seconds || 0) - (c.in_seconds || 0)), 0);
   // Add 1 second padding for final fade
-  return { durationInFrames: Math.ceil((lastEnd + 1) * 30) };
+  return { durationInFrames: Math.ceil((totalDuration + 1) * 30) };
 };
 
 export const Root: React.FC = () => {

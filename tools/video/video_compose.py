@@ -1700,15 +1700,22 @@ class VideoCompose(BaseTool):
         # Deep-copy props so we don't mutate the original
         props = json.loads(json.dumps(composition_data))
 
-        # Convert absolute file paths to file:// URIs for Remotion's
-        # Img and OffthreadVideo components
+        # Resolve source paths for Remotion's Img and OffthreadVideo components.
+        # Remotion serves files from remotion-composer/public/ via staticFile().
+        # Relative paths (e.g. "01-home.png") work via staticFile() in public/.
+        # Absolute paths must be converted to file:// URIs since Remotion's
+        # dev server can only serve files from public/.
+        # DO NOT resolve relative paths to absolute — that breaks staticFile().
         for cut in props.get("cuts", []):
             source = cut.get("source", "")
-            if source and not source.startswith(("http://", "https://", "file://")):
-                resolved = Path(source).resolve()
-                if resolved.exists():
-                    posix = resolved.as_posix()
-                    cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+            if not source or source.startswith(("http://", "https://", "file://")):
+                continue
+            resolved = Path(source).resolve()
+            if resolved.exists():
+                # Absolute path on disk — convert to file:// URI
+                posix = resolved.as_posix()
+                cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+            # else: relative path — leave as-is for staticFile() in public/
 
         # Build a custom themeConfig from the playbook's actual colors.
         # This ensures every video gets a unique visual identity derived
