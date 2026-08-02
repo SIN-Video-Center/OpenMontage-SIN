@@ -12,6 +12,8 @@ from typing import Any, Optional
 import yaml
 import jsonschema
 
+from lib.extensions import extension_cache_key, extension_subdirs
+
 PIPELINE_DEFS_DIR = Path(__file__).resolve().parent.parent / "pipeline_defs"
 SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent
@@ -31,8 +33,9 @@ def _load_manifest_schema() -> dict:
 
 
 @lru_cache(maxsize=64)
-def _load_pipeline_cached(name: str, defs_dir_key: str) -> dict[str, Any]:
+def _load_pipeline_cached(name: str, defs_dir_key: str, extensions_key: str) -> dict[str, Any]:
     """Cached manifest load. Treat the returned dict as READ-ONLY."""
+    del extensions_key  # cache invalidation input
     return load_pipeline(name, Path(defs_dir_key) if defs_dir_key else None)
 
 
@@ -43,7 +46,11 @@ def load_pipeline_readonly(name: str, defs_dir: Optional[Path] = None) -> dict[s
     checkpoint write, board state derivation) should use this instead of
     re-parsing YAML + re-validating the schema each call.
     """
-    return _load_pipeline_cached(name, str(defs_dir) if defs_dir else "")
+    return _load_pipeline_cached(
+        name,
+        str(defs_dir) if defs_dir else "",
+        extension_cache_key() if defs_dir is None else "",
+    )
 
 
 def load_pipeline(name: str, defs_dir: Optional[Path] = None) -> dict[str, Any]:
@@ -56,10 +63,17 @@ def load_pipeline(name: str, defs_dir: Optional[Path] = None) -> dict[str, Any]:
     Returns:
         Validated pipeline manifest dict.
     """
-    defs_dir = defs_dir or PIPELINE_DEFS_DIR
-    path = defs_dir / f"{name}.yaml"
-    if not path.exists():
-        raise FileNotFoundError(f"Pipeline manifest not found: {path}")
+    search_dirs = [defs_dir] if defs_dir is not None else [
+        PIPELINE_DEFS_DIR,
+        *extension_subdirs("pipeline_defs"),
+    ]
+    candidates = [directory / f"{name}.yaml" for directory in search_dirs]
+    path = next((candidate for candidate in candidates if candidate.exists()), None)
+    if path is None:
+        raise FileNotFoundError(
+            f"Pipeline manifest not found: {name}. Searched: "
+            + ", ".join(str(candidate) for candidate in candidates)
+        )
 
     with open(path) as f:
         manifest = yaml.safe_load(f)
@@ -72,8 +86,11 @@ def load_pipeline(name: str, defs_dir: Optional[Path] = None) -> dict[str, Any]:
 
 def list_pipelines(defs_dir: Optional[Path] = None) -> list[str]:
     """List all available pipeline manifest names."""
-    defs_dir = defs_dir or PIPELINE_DEFS_DIR
-    return [p.stem for p in defs_dir.glob("*.yaml")]
+    search_dirs = [defs_dir] if defs_dir is not None else [
+        PIPELINE_DEFS_DIR,
+        *extension_subdirs("pipeline_defs"),
+    ]
+    return sorted({path.stem for directory in search_dirs for path in directory.glob("*.yaml")})
 
 
 def _condition_is_active(condition: Optional[str], context: Optional[dict[str, Any]]) -> bool:
