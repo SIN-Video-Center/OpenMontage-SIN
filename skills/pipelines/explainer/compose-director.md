@@ -8,7 +8,7 @@ This is the last technical stage before the video exists as a playable file. Eve
 
 ## Runtime Routing (MANDATORY first step)
 
-Read `edit_decisions.render_runtime` before anything else. It was locked at proposal and must not be changed silently. The rest of this skill's process steps (Remotion public/ staging, word-level caption burn, etc.) assume `render_runtime="remotion"` — the default for data-driven explainers.
+Read the approved production contract before anything else: `proposal_packet.production_plan.quality_tier`, `delivery_kind`, `motion_expectation`, `composition_mode`, `renderer_family`, and `render_runtime`. None may be changed silently. There is no universal default runtime or authoring mode.
 
 - **`render_runtime="hyperframes"`** — HTML/CSS/GSAP render. Do NOT follow the Remotion-specific steps below. Instead: read `skills/core/hyperframes.md`, `.agents/skills/hyperframes/SKILL.md`, and `.agents/skills/hyperframes-cli/SKILL.md`. Call `video_compose` with the edit_decisions unchanged — it will delegate to `hyperframes_compose`, which materializes a workspace under `projects/<name>/hyperframes/`, runs `lint → validate → render`, and returns the MP4. Both lint AND validate must pass before render; contrast can be deferred during iteration but not for final delivery.
 - **`render_runtime="ffmpeg"`** — simple concat/trim. Call `video_compose` directly; it will NOT auto-upgrade to Remotion when this runtime is explicitly locked.
@@ -16,7 +16,7 @@ Read `edit_decisions.render_runtime` before anything else. It was locked at prop
 
 `final_review.checks.promise_preservation.render_runtime_used` must equal the runtime that actually ran; `runtime_swap_detected` must be `false` unless an approved decision authorizes the swap.
 
-**Pass `proposal_packet` to `video_compose.execute()`** so in-tool swap detection can actually fire. Without it the `runtime_swap_check` is reported as `skipped` and you have to rely on the reviewer skill's cross-artifact comparison instead.
+**Pass both `proposal_packet` and the complete `scene_plan` to `video_compose.execute()`.** They are required for `operation="render"`. The tool refuses to reconstruct the approved contract from reduced cut metadata.
 
 ## Prerequisites
 
@@ -30,23 +30,17 @@ Read `edit_decisions.render_runtime` before anything else. It was locked at prop
 
 ## Process
 
-### Step 1: Choose Render Strategy
+### Step 1: Execute the Approved Render Strategy
 
-Based on the edit decisions, pick the rendering approach:
+Do not choose a new strategy at compose time. Enforce the proposal:
 
-**Remotion render** (DEFAULT — use this unless explicitly overridden):
-- Animated text cards, stat cards, chart scenes
-- Complex transitions (morph, zoom, ken-burns)
-- Programmatic motion graphics
-- Audio embedding (narration + music with fade/volume)
-- Word-level captions via CaptionOverlay component
-- Best for: ALL explainer videos, both image-based and animation-heavy
+- `quality_tier="hero"` + Remotion → `composition_mode="atelier"`, project-local hand-authored composition, stock scene registry forbidden.
+- `quality_tier="hero"` + HyperFrames → hand-authored HyperFrames composition with atelier doctrine.
+- `standard` + `templated` → stock Remotion scenes are allowed only when the scene plan contains complete semantic visual beats and passes the pre-compose motion gate.
+- `draft` → templated Remotion or explicit FFmpeg may produce an animatic.
+- `ffmpeg` → simple sequential video cuts only; no silent image/Ken-Burns downgrade, overlaps, or timeline gaps.
 
-**FFmpeg pipeline** (FALLBACK — only when Remotion is unavailable):
-- Static images with Ken Burns
-- Audio layering
-- SRT subtitle burn-in
-- Best for: environments without Node.js/Remotion installed
+If the approved runtime is unavailable, return a blocker. Never substitute another engine.
 
 **IMPORTANT: When using Remotion, ALL of these go through Remotion — not FFmpeg:**
 - Audio (narration + music) → Remotion `audio` prop, NOT external audio_mixer
@@ -157,12 +151,15 @@ Get the exact encoding parameters via `ffmpeg_output_args(get_profile(name))`.
 
 ### Step 4: Render Video
 
-Call the `video_compose` tool with:
+Call the `video_compose` tool with the complete contract:
 ```
 {
   "operation": "render",
+  "proposal_packet": <proposal_packet artifact>,
+  "script_path": <path to the approved script artifact; or pass script_text>,
+  "scene_plan": <scene_plan artifact>,
   "edit_decisions": <edit_decisions artifact>,
-  "asset_manifest": <asset_manifest artifact>,
+  "asset_manifest": <asset_manifest artifact; optional only for Remotion Atelier>,
   "output_profile": "youtube_landscape",
   "output_path": "renders/output.mp4",
   "options": {
@@ -173,10 +170,7 @@ Call the `video_compose` tool with:
 }
 ```
 
-If using Remotion for animated segments:
-1. Generate Remotion composition data from edit decisions
-2. Call `video_compose` with `operation: "remotion_render"` for animated segments
-3. Assemble Remotion outputs with remaining segments via FFmpeg
+Use the high-level `operation: "render"` for every final. It preserves the runtime decision, resolves assets/audio, runs pre-compose validation, and runs mandatory post-render QA. Direct `remotion_render` is a low-level diagnostic path and must not be used to bypass proposal/scene-plan gates.
 
 **Zero-key Remotion render (component-only videos):**
 When all scenes are Remotion component types (hero_title, stat_card, bar_chart, line_chart,
@@ -187,7 +181,7 @@ for the proven formula — especially the all-dark-background rule for visual co
 
 ### Step 5: Audio Post-Processing
 
-**Remotion path (DEFAULT):** Skip external audio mixing entirely. Remotion handles all audio
+**Remotion path (when approved):** Remotion handles all audio
 natively via `<Audio>` components. Pass audio sources in the composition props:
 ```json
 {
@@ -213,7 +207,7 @@ The video_compose tool will mux this with the video.
 
 Subtitles are mandatory for all explainer content. Generate them from the narration audio — do NOT skip this step.
 
-**Remotion path (DEFAULT — when using Remotion render):**
+**Remotion path (when approved):**
 
 1. **Transcribe** the full narration using the `transcriber` tool (whisperx):
    ```python
@@ -314,18 +308,15 @@ Verify:
 **If audio stream is missing: the render did not embed audio. Do NOT proceed to present
 the video to the user. Fix the audio configuration and re-render.**
 
-**6b. Extract review frames:**
-```python
-from tools.analysis.frame_sampler import FrameSampler
-midpoints = [(cut['in_seconds'] + cut['out_seconds']) / 2 for cut in cuts]
-FrameSampler().execute({
-    'input_path': 'path/to/rendered_video.mp4',
-    'strategy': 'timestamps',
-    'timestamps': midpoints,
-    'output_dir': 'path/to/review-frames',
-    'format': 'png',
-})
-```
+**6b. Verify render-based visual QA:** `video_compose` automatically extracts every scene boundary plus representative timestamps, creates a timestamped contact sheet, analyzes a 2-FPS low-resolution stream, and reports:
+
+- `motion_coverage_ratio`
+- exact `freeze_segments`
+- `repeated_layout_pairs`
+- black frames
+- boundary frame paths and contact sheet path
+
+Any freeze/non-semantic hold ≥2.5s, strong repeated-layout signal, or black frame produces `final_review.status="revise"` or `fail` and therefore `ToolResult.success=false`.
 
 **6c. Transcribe rendered audio (MANDATORY — do NOT skip):**
 ```python
@@ -368,7 +359,7 @@ result = Transcriber().execute({
 >
 > Want me to fix these issues and re-render, or is this good to go?
 
-**Only after user approves (or agent finds zero issues) should the video be considered final.**
+A video is final only when `final_review.status == "pass"`. Both `revise` and `fail` are blocking states and the render tool returns `success=false`. User approval cannot waive a corrupted container, missing audio, runtime swap, delivery-promise violation, freeze gate, clipping, or other critical contract failure.
 
 ### Step 6-old: File and Content Verification
 
@@ -443,3 +434,21 @@ Validate the render_report against the schema and persist via checkpoint.
 - **Subtitle encoding**: Burn subtitles into the video (hardcoded) for maximum compatibility. Don't rely on soft subtitles for social media.
 - **Single-pass encode**: Two-pass encoding produces better quality at the same file size. Worth the extra render time.
 - **Ignoring media profile**: YouTube and TikTok have very different requirements. Always check the target profile.
+
+## Hard caption and language gate
+
+Before rendering, verify the contract in
+`docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`. Pass the caption layout to Remotion.
+With `reserved-rail`, render scenes and overlays inside the shortened visual stage
+and render captions only inside the rail. With `adaptive-regions`, pass all
+active protected regions to `CaptionOverlay`; any collision must throw and fail
+the render.
+
+Never bypass `_pre_compose_validation`, never burn a generic bottom SRT over an
+unplanned final, and never present a render whose subtitle check does not report
+`occlusion_free=true`, `collision_count=0`, and `unicode_text_ok=true`. For German,
+ASCII substitutes and non-NFC text are blocking failures.
+
+## Overview-Video category overlay
+
+For `overview-video`, render a continuous full-frame background and treat the lower reading field as geometry, not a black rail. Final QA must verify category preservation, rendered brand pronunciation, caption background continuity, absence of a full-width bar, semantic claim synchronization, headline wrapping, actual UI legibility, and the normal technical gates.

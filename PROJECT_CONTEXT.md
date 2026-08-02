@@ -42,17 +42,17 @@ Each tool's `agent_skills[]` field bridges Layer 1 → Layer 3. See `skills/INDE
 
 ## Key Patterns
 
-- **Pipeline state machine:** `idea -> script -> scene_plan -> assets -> edit -> compose -> publish`
+- **Pipeline state machine:** `research -> proposal -> script -> scene_plan -> assets -> edit -> compose/final_review -> publish`
 - **Instruction-driven stages:** Each stage has a director skill (MD) that teaches the agent HOW
 - **Pipeline manifests:** Declarative YAML defining stages, skills, tools, review focus, approval gates
 - **Capability-first tool design:** Each major family should expose a selector tool plus explicit provider tools
   - Example: `tts_selector` + `elevenlabs_tts` / `google_tts` / `openai_tts` / `piper_tts`
   - Example: `video_selector` + `heygen_video` / `wan_video` / `hunyuan_video` / `ltx_video_local` / `ltx_video_modal` / `cogvideo_video`
 - **Style playbooks:** YAML defining visual language, typography, motion, audio, asset generation constraints
-- **Artifacts are canonical:** `brief`, `script`, `scene_plan`, `asset_manifest`, `edit_decisions`, `render_report`, `publish_log`
+- **Artifacts are canonical:** `research_brief`, `proposal_packet`, approved `script`, visual-beat `scene_plan`, `asset_manifest`, absolute-timeline `edit_decisions`, `render_report`, blocking `final_review`, `publish_log`
 - **Every tool inherits from `tools/base_tool.py`** (ToolContract)
 - **Checkpoint policy** lives in pipeline manifest (`human_approval_default` per stage) + `skills/meta/checkpoint-protocol.md`
-- **Reviewer** is a meta skill (`skills/meta/reviewer.md`), advisory, max 2 rounds
+- **Reviewer** is a binding meta skill (`skills/meta/reviewer.md`): critical findings block; after two autonomous revision rounds unresolved critical findings escalate rather than becoming warnings
 - **Cost tracker** (`tools/cost_tracker.py`) manages budget: estimate -> reserve -> reconcile
 - **Canonical artifacts** validated against JSON schemas in `schemas/artifacts/`
 
@@ -70,11 +70,11 @@ Each tool's `agent_skills[]` field bridges Layer 1 → Layer 3. See `skills/INDE
 | `tools/tool_registry.py` | Tool discovery and reporting |
 | `tools/cost_tracker.py` | Budget governance |
 | `tools/video/video_stitch.py` | Multi-clip assembly (stitch, spatial, validate, preview) |
-| `tools/video/video_compose.py` | Runtime-aware composition orchestrator — routes to Remotion / HyperFrames / FFmpeg based on `edit_decisions.render_runtime` |
+| `tools/video/video_compose.py` | Governed composition orchestrator — preserves proposal runtime/composition mode, requires proposal + approved script + scene plan + EDL, and blocks delivery unless measured final review passes |
 | `tools/video/hyperframes_compose.py` | HyperFrames runtime — workspace materialization, `hyperframes lint`/`validate`/`render`, FFmpeg floor check |
 | `tools/character/character_animation.py` | Local character-animation tools — character specs, SVG rig plans, pose libraries, action timelines, HyperFrames packages, and QA reports |
 | `lib/hyperframes_style_bridge.py` | Playbook → CSS custom properties + `DESIGN.md` bridge for HyperFrames workspaces |
-| `remotion-composer/src/components/` | 8 Remotion components (TextCard, StatCard, ProgressBar, CalloutBox, ComparisonCard + charts/) |
+| `remotion-composer/src/components/` | Templated Remotion components for draft/repeatable standard work; hero Remotion work uses project-local Atelier composition |
 | `.agents/skills/hyperframes*/` | Vendored HyperFrames Layer 3 skills (authoring contract, CLI, registry, website-to-video) |
 | `skills/core/hyperframes.md` | Layer 2 — when OpenMontage should pick HyperFrames vs Remotion, artifact → workspace mapping |
 | `schemas/styles/playbook.schema.json` | Playbook schema v2 with design tokens (chart_palette, scale_system, weight_matrix, color_rules) |
@@ -99,11 +99,11 @@ Each tool's `agent_skills[]` field bridges Layer 1 → Layer 3. See `skills/INDE
 
 ## When Building New Pipelines
 
-1. Create a YAML manifest in `pipeline_defs/` (validated by `pipeline_manifest.schema.json`)
-2. Create stage director skills in `skills/pipelines/<pipeline-name>/` (7 skills: idea through publish)
-3. Reference meta skills (reviewer, checkpoint-protocol) in the manifest
-4. Add compatible playbooks to the manifest
-5. Add contract tests in `tests/contracts/`
+1. Create a YAML manifest in `pipeline_defs/` (validated by `pipeline_manifest.schema.json`).
+2. Create stage director skills in `skills/pipelines/<pipeline-name>/`, including proposal routing and governed compose/final-review behavior.
+3. Reference meta skills (reviewer, checkpoint-protocol, taste-direction, and bespoke-composition where applicable).
+4. Require canonical proposal/script/scene/edit artifacts at compose and publish only after `final_review.status == "pass"`.
+5. Add compatible playbooks and contract tests in `tests/contracts/`.
 
 ## When Building New Tools
 
@@ -117,3 +117,8 @@ Each tool's `agent_skills[]` field bridges Layer 1 → Layer 3. See `skills/INDE
 6. Let discovery happen through `tools/tool_registry.py`; do not depend on ad hoc imports
 7. Add a JSON schema in `schemas/tools/` if the tool has complex I/O
 8. Add tests only after the runtime path is correct
+
+## Video Categories
+
+OpenMontage now treats video category as a first-class, cross-artifact contract. The first active category is `overview-video`; its reference implementation is `projects/openafd-v3-motion-led`. Future categories are registered as planned in `schemas/video_categories.registry.json` and require their own contract, skill, tests, and passing reference project before use. See `docs/VIDEO_CATEGORIES.md`.
+

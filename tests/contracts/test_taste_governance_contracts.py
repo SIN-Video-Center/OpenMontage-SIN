@@ -69,7 +69,18 @@ def test_proposal_packet_schema_accepts_taste_profile():
         "production_plan": {
             "pipeline": "animated-explainer",
             "stages": [{"stage": "proposal", "tools": [], "approach": "Plan the production."}],
+            "quality_tier": "standard",
+            "delivery_kind": "templated",
+            "motion_expectation": "calm",
+            "renderer_family": "explainer-data",
             "render_runtime": "remotion",
+            "composition_mode": "templated",
+            "delivery_promise": {
+                "promise_type": "data_explainer",
+                "motion_required": False,
+                "tone_mode": "educational",
+                "quality_floor": "presentable",
+            },
             "taste_profile": _taste_profile(),
         },
         "cost_estimate": {

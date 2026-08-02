@@ -91,3 +91,7 @@ Treat these as quality failures:
   new sample.
 - Final narration is generated from raw script text while structured
   `provider_text` or `delivery_cues` were present.
+
+## Display text, spoken text, and pronunciation verification
+
+Do not force viewer-facing spelling to imitate pronunciation. Keep exact display text in script/captions and send provider-ready spoken text through `pronunciation_guides`. For each brand, acronym, name or technical term, record `display_text`, `spoken_text`, and `expected_transcript_aliases`. Generate the most pronunciation-sensitive sample, transcribe it, and reject it unless an approved alias is present. Re-run this check on the rendered final; a correct pre-render take does not prove the correct file was mixed. Example: `OpenAfD Chat` is displayed exactly that way and spoken in German as `Open A Eff De Chat`.

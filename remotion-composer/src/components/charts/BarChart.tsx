@@ -25,6 +25,7 @@ interface BarChartProps {
   showValues?: boolean;
   animationStyle?: BarAnimationStyle;
   barGap?: number;
+  sceneDurationFrames?: number;
 }
 
 export const BarChart: React.FC<BarChartProps> = ({
@@ -39,9 +40,11 @@ export const BarChart: React.FC<BarChartProps> = ({
   showValues = true,
   animationStyle = "grow-up",
   barGap = 12,
+  sceneDurationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationInFrames } = useVideoConfig();
+  const durationInFrames = sceneDurationFrames ?? compositionDurationInFrames;
 
   const maxValue = Math.max(...data.map((d) => d.value), 1);
 

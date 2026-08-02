@@ -36,11 +36,14 @@ required_skills:
   - pipelines/explainer/edit-director
   - pipelines/explainer/compose-director
   - pipelines/explainer/publish-director
+  - categories/overview-video
   - meta/reviewer
   - meta/checkpoint-protocol
   - meta/skill-creator
   - meta/animation-runtime-selector
   - meta/voice-performance-director
+  - meta/taste-direction
+  - meta/bespoke-composition
 
 orchestration:
   mode: executive-producer
@@ -141,7 +144,6 @@ stages:
     skill: pipelines/explainer/scene-director
     required_artifacts_in:
       - script
-    optional_artifacts_in:
       - proposal_packet
     produces:
       - scene_plan
@@ -149,13 +151,18 @@ stages:
     checkpoint_required: true
     human_approval_default: true
     review_focus:
-      - Full script duration covered with no gaps
+      - Full script duration covered with one absolute final timeline and no unintended gaps
+      - Every spoken claim has primary_subject, visual_state_before, visual_action, visual_state_after, motion_class, and semantic_purpose
+      - Semantic motion coverage meets the approved delivery promise; camera-only/decorative motion stays within limits
       - "Visual variety: no 3+ consecutive scenes of same type"
       - Asset feasibility - every required_asset uses a tool from the production plan
-      - Playbook adherence - transitions, colors, pacing rules
+      - Playbook/taste-profile adherence - transitions, colors, pacing, reference strategy, and anti-patterns
+      - Hero work is bespoke/atelier and does not specify a stock Explainer final
     success_criteria:
-      - Schema-valid scene_plan with required_assets per scene
-      - At least 3 different scene types used
+      - Schema-valid scene_plan with approved quality_tier, delivery_kind, and motion_expectation preserved
+      - Every scene contains a complete visual state-change contract
+      - At least 3 different scene types or scene grammars used for videos longer than 20 seconds
+      - Hero/atelier slideshow-risk average is below 2.0
 
   - name: assets
     skill: pipelines/explainer/asset-director
@@ -198,39 +205,47 @@ stages:
   - name: edit
     skill: pipelines/explainer/edit-director
     required_artifacts_in:
+      - proposal_packet
       - scene_plan
-      - asset_manifest
     optional_artifacts_in:
       - script
+      - asset_manifest
     produces:
       - edit_decisions
     tools_available: []
     checkpoint_required: true
     human_approval_default: false
     review_focus:
-      - All cuts reference valid assets from manifest
-      - Subtitles enabled with playbook-compatible styling
-      - Music configured with ducking parameters
-      - No timeline gaps or overlaps
+      - All cuts reference valid assets from manifest or the approved Atelier project-local asset path
+      - in_seconds/out_seconds are absolute final-timeline positions; source_in_seconds alone trims source media
+      - Scene semantic-motion fields are preserved on corresponding cuts
+      - Subtitles enabled with playbook-compatible styling when speech is present
+      - Every scene declares protected_regions and caption_layout; the EDL declares a reserved-rail or adaptive-regions policy
+      - Viewer-facing text is Unicode NFC; German output uses correct umlauts and ß rather than ASCII substitutions
+      - Music configured with narration-aware ducking when narration and music coexist
+      - No unintended timeline gaps or unsupported primary-layer overlaps
     success_criteria:
-      - Schema-valid edit_decisions
-      - Full video duration covered
+      - Schema-valid edit_decisions with renderer_family, render_runtime, and composition_mode preserved from proposal
+      - Full video duration covered on one absolute timeline
+      - Atelier edit decisions contain art_direction and scene_inventory
 
   - name: compose
     skill: pipelines/explainer/compose-director
     required_artifacts_in:
-      - edit_decisions
-      - asset_manifest
-    optional_artifacts_in:
+      - proposal_packet
+      - script
       - scene_plan
+      - edit_decisions
+    optional_artifacts_in:
+      - asset_manifest
     produces:
       - render_report
       - final_review
     required_tools:
       - video_compose
-      - audio_mixer
     optional_tools:
       - video_stitch
+      - audio_mixer
     tools_available:
       - video_compose
       - hyperframes_compose
@@ -239,14 +254,19 @@ stages:
     checkpoint_required: true
     human_approval_default: false
     review_focus:
+      - proposal_packet and complete scene_plan were passed to video_compose operation=render
       - Output video exists and is playable
       - "Duration within +/-5% of target"
-      - Audio is clear with proper narration/music balance
-      - "render_runtime in edit_decisions matches proposal_packet — silent swap to another runtime is a CRITICAL governance violation"
+      - Audio is clear with proper narration/music balance, measured loudness, true peak, and configured ducking
+      - Render-based QA inspected scene boundaries, contact sheet, 2-FPS motion coverage, freeze intervals, repeated layouts, and black frames
+      - "render_runtime and composition_mode in edit_decisions match proposal_packet — silent swaps are CRITICAL governance violations"
       - "If render_runtime='hyperframes': `hyperframes lint` and `hyperframes validate` must pass before render"
+      - final_review.status is exactly pass; revise and fail are blocking
     success_criteria:
       - Schema-valid render_report with output paths
-      - Output file exists and passes ffprobe validation
+      - Schema-valid final_review with status pass
+      - Output file exists and passes ffprobe, motion/freeze/repetition, audio, subtitle, caption-occlusion, Unicode-language, and delivery-promise validation
+      - final_review.subtitle_check reports occlusion_free=true, collision_count=0, and unicode_text_ok=true
 
   - name: publish
     skill: pipelines/explainer/publish-director

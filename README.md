@@ -200,7 +200,7 @@ Or if you want the real-footage path:
 "Make a 75-second documentary montage about city life in the rain. Use real footage only, no narration, elegiac tone, with music."
 ```
 
-That's it. The agent researches your topic with live web search, generates AI images, writes and narrates the script with voice direction, finds royalty-free background music automatically, burns in word-level subtitles, and renders the final video. Before you see anything, the system runs a multi-point self-review — ffprobe validation, frame sampling, audio level analysis, delivery promise verification, and subtitle checks. Every provider selection is scored across 7 dimensions with an auditable decision log. Every creative decision gets your approval.
+That's it. The agent researches your topic with live web search, writes and narrates the script with voice direction, plans concrete visual state changes, sources or generates the approved assets, and renders through the runtime and authoring mode locked at proposal. Before a video can be delivered, the system verifies the container, scene-boundary/contact-sheet frames, a 2-FPS motion stream, freeze intervals, repeated layouts, black frames, rendered-output transcript, loudness/true peak, ducking, delivery-promise/runtime preservation, and subtitles. `pass` is the only deliverable final-review state. Every provider selection is scored across 7 dimensions with an auditable decision log. Every creative decision gets your approval.
 
 > **No `make`?** macOS/Linux: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r requirements.txt && cd remotion-composer && npm install && cd .. && python -m pip install piper-tts && cp .env.example .env`
 >
@@ -286,11 +286,11 @@ You don't need paid API keys to make real videos. Out of the box, `make setup` g
 | **Post-production** | FFmpeg | Encoding, subtitle burn-in, audio mixing, color grading |
 | **Subtitles** | Built-in | Auto-generated captions with word-level timing |
 
-OpenMontage picks between Remotion and HyperFrames at proposal time (locked as `render_runtime`). Remotion is the default for data-driven explainers and anything using the existing React scene stack; HyperFrames is the default for motion-graphics-heavy briefs that express naturally as HTML + GSAP, including the `character-animation` pipeline's SVG/GSAP rig output. See `skills/core/hyperframes.md` for the full decision matrix.
+OpenMontage presents Remotion and HyperFrames at proposal time when both are available and locks the approved `render_runtime`. It separately locks `composition_mode`: templated for drafts/repeatable standard work or Atelier for bespoke work. Hero finals require bespoke/Atelier authoring; the stock React scene stack may produce an animatic but is not a universal premium default. See `skills/core/hyperframes.md`, `skills/meta/animation-runtime-selector.md`, and `skills/meta/bespoke-composition.md`.
 
 **Two free-ish paths:**
 
-- **Image-based video:** Piper narrates your script, images provide the visuals, and Remotion animates them into a polished edit.
+- **Image-based draft/standard video:** Piper narrates your script and Remotion can build a timing animatic or approved still-led standard edit. Camera moves over stills are measured as `camera_only`, not automatically claimed as semantic motion or hero quality.
 - **Local character animation:** SVG rigs, pose libraries, GSAP timelines, and HyperFrames render cartoon character acting to `projects/<project-name>/renders/final.mp4`.
 - **Real-footage video:** the documentary montage pipeline builds a CLIP-searchable corpus from Archive.org, NASA, Wikimedia Commons, and optional free-key sources like Pexels and Unsplash, then cuts together actual motion footage into a finished video.
 
@@ -392,7 +392,7 @@ Edit your own talking-head footage. Generate a fully animated explainer from scr
 - **Live web research built in** — before writing a single word of script, the agent runs 15-25+ web searches across YouTube, Reddit, news sites, and academic sources to ground your video in real, current data
 - **Both free/local AND cloud providers** — every capability supports open-source local alternatives alongside premium APIs. Use what you have.
 - **No vendor lock-in** — swap providers freely. The scored selector ranks every provider across 7 dimensions (task fit, output quality, control, reliability, cost efficiency, latency, continuity) and picks the best match automatically.
-- **Production-grade quality gates** — delivery promise enforcement blocks slideshow-looking renders, pre-compose validation catches broken plans before wasting GPU time, and mandatory post-render self-review (ffprobe + frame extraction + audio analysis) ensures the agent never presents garbage. Every provider choice, style decision, and fallback gets logged in an auditable decision trail.
+- **Production-grade quality gates** — delivery-promise and semantic-motion enforcement block slideshow-looking plans, hero work is routed to bespoke/Atelier authoring, and mandatory post-render review measures the actual file: ffprobe, scene boundaries/contact sheet, 2-FPS motion/freeze/repetition, rendered transcript, loudness/true peak, ducking, subtitles, and runtime/promise preservation. `revise` and `fail` both block delivery.
 - **Budget governance built in** — cost estimation before execution, spend caps, per-action approval thresholds. No surprise bills.
 
 ---
@@ -426,10 +426,10 @@ Agent presents for your approval -- you stay in control at every creative decisi
 Pre-compose validation gate -- delivery promise, slideshow risk, renderer governance
  |
  v
-Render (Remotion or FFmpeg) -- composition engine matched to visual grammar
+Render (Remotion, HyperFrames, or FFmpeg) -- approved runtime + templated/Atelier authoring mode preserved
  |
  v
-Post-render self-review -- ffprobe, frame extraction, audio analysis, promise verification
+Post-render self-review -- scene-boundary/contact sheet + 2-FPS motion/freeze/repetition + rendered transcript + loudness/true peak + subtitles + contract preservation
  |
  v
 Final video output -- only if self-review passes
@@ -591,7 +591,7 @@ Each tool declares which Layer 3 skills it relies on. The agent reads Layer 1 to
 
 | Engine | Type | What It Does |
 |--------|------|-------------|
-| **Remotion** | Local (Node.js) | React-based programmatic video — spring-animated image scenes, stat reveals, section titles, hero cards, TikTok-style word-by-word captions, scene transitions (fade/slide/wipe/flip), Google Fonts, audio with fade curves, and the TalkingHead avatar composition. **When no video generation providers are configured, the agent generates still images and Remotion turns them into fully animated video.** |
+| **Remotion** | Local (Node.js) | React-based programmatic video in two governed modes: templated components for drafts/repeatable standard work, or project-local Atelier compositions for bespoke/hero work. Supports absolute-timeline scenes, rendered transitions, captions, segmented narration, SFX, and narration-aware music ducking. Still-image camera moves remain `camera_only`; they are not automatically semantic motion or hero quality. |
 | **HyperFrames** | Local (Node.js ≥ 22) | HTML/CSS/GSAP programmatic video — kinetic typography, product promos, launch reels, custom motion graphics, registry blocks (data charts, grain overlays, shader transitions), website-to-video workflows, and rigged SVG character animation. Consumed via `npx hyperframes`; no monorepo checkout needed. |
 | **FFmpeg** | Local | Core video assembly, encoding, subtitle burn, audio muxing, color grading |
 
@@ -639,9 +639,9 @@ OpenMontage treats video production like real engineering — with quality gates
 ### Quality Gates
 
 - **Human approval gates are enforced, not suggested** — proposal, script, scene plan, generated assets, and publish all pause for your sign-off. The checkpoint writer rejects a "completed" gated stage without recorded approval, and every superseded checkpoint is archived so the audit trail (including gate transitions) survives revisions. Review happens visually on the [Backlot board](#watch-it-happen--the-backlot-living-storyboard).
-- **Pre-compose validation** — blocks render if the delivery promise is violated (e.g. "motion-led" video with 80% still images), slideshow risk score is critical, or renderer family is missing. Catches broken plans before wasting GPU time.
-- **Post-render self-review** — after every render, the runtime runs ffprobe validation, extracts frames at 4 positions to check for black frames and broken overlays, analyzes audio levels for silence and clipping, verifies the delivery promise was honored, and checks subtitle presence. If the review fails, the video is not presented.
-- **Slideshow risk scoring** — 6-dimension analysis (repetition, decorative visuals, weak motion, shot intent, typography overreliance, unsupported cinematic claims) prevents "animated PowerPoint" outputs.
+- **Pre-compose validation** — requires the approved proposal, script, complete visual-beat scene plan, and edit contract; blocks delivery-promise violations, insufficient semantic motion, slideshow-risk `revise`/`fail` at final quality, hero/Atelier routing violations, and runtime/composition swaps before render.
+- **Post-render self-review** — after every render, the runtime runs ffprobe, extracts representative and scene-boundary frames, creates a timestamped contact sheet, analyzes a 2-FPS stream for actual motion coverage, freeze intervals, repeated layouts, and black frames, transcribes the rendered output against the approved script, measures loudness/true peak and ducking, and checks subtitle/caption presence. Only `status="pass"` is deliverable.
+- **Slideshow risk scoring** — semantic visual state changes, repetition, decorative/camera-only motion, shot intent, typography overreliance, and unsupported cinematic claims are evaluated before compose; rendered-frame QA then verifies that the intended motion actually exists.
 - **Source media inspection** — when users supply their own footage, the system probes every file (resolution, codec, audio channels, duration) and builds planning implications before a single creative decision is made. No hallucinating content from filenames.
 
 ### Scored Provider Selection
@@ -761,3 +761,17 @@ make test
 If this project looks useful to you, a ⭐ would really mean a lot — it helps others discover it too.
 
 If you'd like to go further, [sponsor the project](https://github.com/sponsors/calesthio) — OpenMontage is built nights and weekends, and your support makes that sustainable.
+
+### Captions occupy real layout space
+
+OpenMontage does not place subtitles blindly over finished graphics. Final
+productions reserve a caption rail or use declared protected regions with
+collision-free adaptive placement. The renderer fails rather than covering a
+chart, diagram, interface, face, label, or animation path. German output is
+validated as Unicode NFC and rejects ASCII substitutions such as `waehlen` or
+`souveraen`. See `docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`.
+
+### Video categories
+
+The first production category is **Overview-Video** (`overview-video`). Category rules are independent of pipeline and runtime. See `docs/VIDEO_CATEGORIES.md` and `docs/categories/OVERVIEW_VIDEO.md`.
+

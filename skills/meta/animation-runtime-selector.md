@@ -5,7 +5,7 @@ Meta-skill that answers two questions:
 1. **Which composition runtime should this video use?** — Remotion, HyperFrames, or FFmpeg.
 2. **Which animation library / Layer 3 skills should this scene reach for?** — Remotion primitives, GSAP plugins, framer-motion, Lottie, Manim, D3.
 
-Read this before authoring any animated component or composition, and whenever you're choosing `render_runtime` at proposal time. It routes you to the right Layer 3 skill so you don't waste time hand-rolling what a plugin already solves.
+Read this after proposal quality classification and before authoring any animated component or composition. It routes the approved `quality_tier`, `delivery_kind`, `motion_expectation`, and `composition_mode` to a technical runtime and the matching Layer 3 skill.
 
 > **Authoring mode comes first.** Before runtime or library, decide *how* the composition is
 > built: **templated** (assemble stock `cut.type` scenes) vs **atelier** (hand-author from
@@ -25,10 +25,7 @@ Apply when:
 
 ## Runtime choice (Remotion vs HyperFrames vs FFmpeg)
 
-OpenMontage separates creative grammar (`renderer_family`) from technical
-engine (`render_runtime`). Both are locked at proposal and carried through
-`edit_decisions` unchanged. Silent runtime swaps at compose time are a
-contract violation.
+OpenMontage separates quality tier, delivery kind, motion expectation, authoring mode (`composition_mode`), creative grammar (`renderer_family`), and technical engine (`render_runtime`). All are locked at proposal and carried through scene planning/edit unchanged. Silent runtime or authoring-mode swaps at compose time are contract violations.
 
 ### HARD RULE — present both runtimes, don't silently default
 
@@ -56,10 +53,10 @@ when both were available is a CRITICAL reviewer finding.
 
 | Brief characteristic | `render_runtime` | Read |
 |---|---|---|
-| Existing React scene stack (text_card, stat_card, chart, caption overlay, TalkingHead, CinematicRenderer) | **remotion** | `skills/core/remotion.md` |
+| Draft/repeatable standard work using the existing React scene stack | **remotion + templated** | `skills/core/remotion.md` |
 | Word-level caption burn / karaoke captions | **remotion** | `skills/core/remotion.md` |
 | Avatar / lip-sync / presenter | **remotion** | `skills/core/remotion.md` |
-| Kinetic typography, HTML/GSAP-native motion, product promo, launch reel | **hyperframes** | `skills/core/hyperframes.md` + `.agents/skills/hyperframes/SKILL.md` (router) → `hyperframes-core` (contract), `hyperframes-creative` (palette/type), `hyperframes-animation` (motion) |
+| Hero kinetic typography, HTML/GSAP-native motion, product promo, launch reel | **hyperframes + atelier** | `skills/core/hyperframes.md` + `.agents/skills/hyperframes/SKILL.md` (router) → `hyperframes-core` (contract), `hyperframes-creative` (palette/type), `hyperframes-animation` (motion) |
 | Website → video, UI-driven composition | **hyperframes** | `.agents/skills/website-to-video/SKILL.md` (renamed from website-to-hyperframes in 0.7) |
 | Registry block needed (data-chart, grain-overlay, shader transitions, etc.) | **hyperframes** | `.agents/skills/hyperframes-registry/SKILL.md` |
 | Beat-synced music video (audio drives scene timing) | **hyperframes** | `.agents/skills/music-to-video/SKILL.md` — uses `hyperframes beats` to detect drops, lays out frames on the beat grid |
@@ -91,7 +88,8 @@ decision matrix and the list of features that stay Remotion-only in Phase 1.
 | Synthetic terminal / CLI demo | Remotion TerminalScene | `.agents/skills/synthetic-screen-recording` |
 | Mathematical / scientific visualization | Manim | `.agents/skills/manim-composer`, `.agents/skills/manimce-best-practices` |
 | D3 data-driven visualization | D3 | `.agents/skills/d3-viz` |
-| Data chart (bar/line/pie/KPI) | Remotion built-in chart components | `remotion-composer/SCENE_TYPES.md` |
+| Draft/standard data chart with progressive semantic build | Remotion templated chart components | `remotion-composer/SCENE_TYPES.md` |
+| Hero/bespoke data visualization | Remotion Atelier or HyperFrames Atelier, selected from the approved grammar | `skills/core/remotion.md` / `skills/core/hyperframes.md` |
 | HyperFrames composition — animation knowledge (rules, blueprints, transitions, runtime adapters) | HyperFrames + GSAP default | `.agents/skills/hyperframes-animation` (consolidated motion skill) + `.agents/skills/gsap-core`, `.agents/skills/gsap-timeline` |
 | HyperFrames composition structure (data-* timing, tracks, sub-compositions) | HyperFrames | `.agents/skills/hyperframes-core` |
 | HyperFrames creative direction (palette, type, narration, beat planning) | HyperFrames | `.agents/skills/hyperframes-creative` |
@@ -101,7 +99,7 @@ decision matrix and the list of features that stay Remotion-only in Phase 1.
 
 ## The "keep it simple" bias
 
-Before reaching for GSAP, ask: **does Remotion's primitive API solve this in ≤ 20 lines?**
+After the quality tier and authoring mode are approved, ask: **does the selected runtime's primitive API solve this deterministic scene behavior clearly?** Do not let a ≤20-line stock implementation override an approved hero/Atelier route.
 
 - Fade/slide/scale/rotate → `interpolate(frame, [inFrame, outFrame], [from, to])`
 - Natural "bouncy" motion → `spring({ frame, fps, config: { damping, stiffness } })`
@@ -128,7 +126,7 @@ tl.seek(frame / fps);
 
 // Pattern 3: GSAP as value calculator only
 const easeFn = gsap.parseEase('power2.out');
-const t = frame / durationInFrames;
+const t = frame / sceneDurationInFrames;
 const easedValue = easeFn(t);
 ```
 
@@ -145,7 +143,8 @@ The asset-director tells you *what* to build in the context of this pipeline. Th
 
 ## Never do
 
-- ❌ Pull GSAP into a scene that needs only fade/slide — use Remotion primitives.
+- ❌ Pull GSAP into a templated scene that needs only fade/slide — use Remotion primitives.
+- ❌ Use a stock Remotion scene merely because it is shorter to write when the approved work is hero/Atelier.
 - ❌ Use GSAP with `requestAnimationFrame` inside Remotion — render will be non-deterministic.
 - ❌ Skip reading the matching Layer 3 skill when a plugin is indicated — per-plugin prompting guidance matters.
 - ❌ Register GSAP plugins inside a component body — register once at module scope or app entry.

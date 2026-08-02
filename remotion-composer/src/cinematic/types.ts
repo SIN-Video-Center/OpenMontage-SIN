@@ -1,3 +1,5 @@
+import type { CaptionLayoutConfig } from "../components/captionLayout";
+
 export type CinematicTone = "cold" | "steel" | "void" | "neutral";
 
 export interface CinematicBaseScene {
@@ -52,6 +54,7 @@ export interface CinematicCaptionConfig {
   color?: string;
   highlightColor?: string;
   backgroundColor?: string;
+  layout?: CaptionLayoutConfig;
 }
 
 export interface CinematicRendererProps {

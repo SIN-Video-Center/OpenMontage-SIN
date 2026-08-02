@@ -185,6 +185,14 @@ edit_decisions = {
     "props_path": "<absolute path to artifacts/props.json>",
     "public_dir": "<absolute path to projects/<slug>/public/>",
     "art_direction": "<short note or path to art-direction.md — REQUIRED>",
+    "scene_inventory": [
+      {
+        "scene_id": "scene-01",
+        "primary_subject": "<unique subject for this scene>",
+        "signature_device_present": false,
+        "representative_frame": "projects/<slug>/snapshots/scene-01.png"
+      }
+    ],
     "scale": 0.5,          // 0.5 for a fast draft; drop for the 1080p final
     "crf": 18,             // crisp final
     "concurrency": 8
@@ -192,9 +200,15 @@ edit_decisions = {
 }
 ```
 
-No `asset_manifest` or `cuts` are required in atelier mode — the composition owns its own assets.
-The tool's `_run_atelier_checks` fails the render if any source file imports from the stock
-registry (`src/components`, `src/Explainer`, etc.), and warns if `art_direction` is missing.
+No `asset_manifest` or stock `cuts` are required in atelier mode, but `proposal_packet` and the complete `scene_plan` are mandatory for every render. The composition owns its assets while the pipeline retains the approved quality and visual-beat contract.
+
+The tool's `_run_atelier_checks` fails the render when:
+
+- any source file imports from the stock registry (`src/components`, `src/Explainer`, etc.),
+- `art_direction` is missing,
+- `scene_inventory` is missing,
+- two scenes reuse the same normalized `primary_subject`, or
+- the signature device appears in more than two scenes.
 
 #### HyperFrames path
 - Scaffold with `npx hyperframes init <slug>` (run from `projects/`). HF init generates
@@ -210,9 +224,7 @@ registry (`src/components`, `src/Explainer`, etc.), and warns if `art_direction`
   Snapshot is HF's native visual-spotcheck (contact-sheet of PNG frames at chosen
   timestamps) — use it the same way an atelier `final_review.visual_spotcheck` would.
 - **Render**: `npx hyperframes render . --output renders/<name>.mp4`.
-  > Known gap (F13): `hyperframes_compose.render` currently requires `edit_decisions.cuts[]`
-  > from the templated path. For hand-authored HF compositions it errors; call `npx` directly
-  > until the tool grows a bespoke branch.
+  `video_compose operation="render"` remains the final governed entry point so proposal preservation and post-render QA cannot be bypassed. Use direct `npx hyperframes` only for authoring-time lint, validate, snapshots, and local diagnostics.
 
 ## Guardrails so this doesn't backfire
 
@@ -275,3 +287,17 @@ verification).
 See also: `skills/meta/animation-runtime-selector.md` (runtime + library routing),
 `AGENT_GUIDE.md` → "Composition Authoring Mode", `/hyperframes` (the HF router and
 capability map).
+
+## Caption-safe composition is mandatory
+
+Read `docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`. In Atelier work, captions are a
+layout region designed before scene authoring, not an overlay added at the end.
+Prefer `reserved-rail` for finals. Keep every scene's primary subject, labels,
+lines, controls, and animation paths outside that rail and declare them in
+`protected_regions`. When using `adaptive-regions`, both candidate zones must be
+planned; if neither is free, recompose the scene. Never lower opacity or cover a
+less-important graphic as a workaround.
+
+All viewer-facing copy must be Unicode NFC and linguistically correct. For German,
+write `wählen`, `souverän`, `eigenständig`, and `quellengestützt`. ASCII
+transliterations are critical defects and block render.

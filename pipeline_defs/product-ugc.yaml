@@ -1,0 +1,262 @@
+name: product-ugc
+version: "1.0"
+description: >
+  Evidence-first short-form product creative pipeline for ShopSIN. Produces a governed
+  commerce image pack and a 9:16 UGC-style product video without fake testimonials,
+  invented product features, undisclosed realistic AIGC, or automatic publishing.
+category: generated
+stability: beta
+default_checkpoint_policy: guided
+
+extensions:
+  custom_scripts: true
+  custom_playbooks: true
+  custom_skills: true
+  custom_tools: false
+
+required_skills:
+  - pipelines/product-ugc/research-director
+  - pipelines/product-ugc/proposal-director
+  - pipelines/product-ugc/script-director
+  - pipelines/product-ugc/scene-director
+  - pipelines/product-ugc/asset-director
+  - pipelines/product-ugc/edit-director
+  - pipelines/product-ugc/compose-director
+  - pipelines/product-ugc/publish-director
+  - meta/reviewer
+  - meta/checkpoint-protocol
+  - meta/animation-runtime-selector
+  - meta/voice-performance-director
+  - meta/taste-direction
+  - meta/bespoke-composition
+
+compatible_playbooks:
+  recommended:
+    - premium-minimalist
+    - flat-motion-graphics
+  also_works:
+    - clean-professional
+  custom_allowed: true
+
+metadata:
+  source_system: shopsin-commerce-control-plane
+  target_platforms:
+    - tiktok
+    - instagram_reels
+    - shopsin
+  primary_aspect_ratio: "9:16"
+  direct_publish_allowed: false
+
+stages:
+  - name: research
+    skill: pipelines/product-ugc/research-director
+    required_artifacts_in:
+      - commerce_intake
+    produces:
+      - research_brief
+    tools_available: []
+    checkpoint_required: true
+    human_approval_default: false
+    review_focus:
+      - Exact product identity is preserved from supplied source images and CJ identifiers
+      - Every factual claim maps to a supplied or independently verified source
+      - Unknown manufacturer, certification, dimensions, material, compatibility, or performance remains unknown
+      - Competitor inspiration is used for format analysis only, never copied
+      - Platform disclosure, IP, safety, and commercial-content requirements are identified
+    success_criteria:
+      - Research brief separates verified facts, uncertain facts, prohibited claims, and visual constraints
+      - All factual sources have URLs
+      - No fabricated testimonial or user result is proposed
+
+  - name: proposal
+    skill: pipelines/product-ugc/proposal-director
+    required_artifacts_in:
+      - commerce_intake
+      - research_brief
+    produces:
+      - proposal_packet
+      - decision_log
+    tools_available: []
+    checkpoint_required: true
+    human_approval_default: true
+    review_focus:
+      - At least three genuinely different creative concepts are presented
+      - Product image pack and video concept share one coherent art direction
+      - Available providers and both composition runtimes are presented honestly
+      - Cost estimate is itemized before paid generation
+      - AI disclosure and commercial disclosure plans are explicit
+      - Hero work selects bespoke Atelier authoring
+    success_criteria:
+      - Schema-valid proposal packet
+      - Selected concept preserves all product-truth constraints
+      - User explicitly approves concept, provider path, runtime, authoring mode, and budget
+
+  - name: script
+    skill: pipelines/product-ugc/script-director
+    required_artifacts_in:
+      - proposal_packet
+      - research_brief
+    produces:
+      - script
+    tools_available: []
+    checkpoint_required: true
+    human_approval_default: true
+    review_focus:
+      - Hook lands within 1.5 seconds without clickbait or fake scarcity
+      - Spoken copy is natural German and remains evidence-backed
+      - Product is introduced early and demonstrated repeatedly
+      - No fake first-person ownership, testimonial, medical claim, or guaranteed outcome
+      - CTA is clear and proportionate
+    success_criteria:
+      - Script duration is 20 to 35 seconds unless proposal explicitly approves another duration
+      - Every claim has a research reference or is clearly framed as opinion/use case
+      - Voice directions and caption-safe phrases are included
+
+  - name: scene_plan
+    skill: pipelines/product-ugc/scene-director
+    required_artifacts_in:
+      - proposal_packet
+      - script
+      - research_brief
+    produces:
+      - scene_plan
+    tools_available: []
+    checkpoint_required: true
+    human_approval_default: true
+    review_focus:
+      - Every spoken claim has a concrete and truthful visual demonstration
+      - Exact product silhouette, controls, colors, labels, included accessories, and proportions are preserved
+      - Product appears in the opening and throughout the video
+      - Motion is semantic rather than decorative camera movement only
+      - Safe areas work for TikTok UI and burned captions
+      - Realistic AI people/scenes have a disclosure treatment
+    success_criteria:
+      - Schema-valid scene plan with a complete absolute timeline
+      - Every scene includes before/action/after visual states and semantic purpose
+      - No planned shot requires an unverified product feature
+
+  - name: assets
+    skill: pipelines/product-ugc/asset-director
+    required_artifacts_in:
+      - proposal_packet
+      - script
+      - scene_plan
+      - commerce_intake
+    produces:
+      - asset_manifest
+    required_tools:
+      - image_selector
+      - tts_selector
+    optional_tools:
+      - video_selector
+      - subtitle_gen
+      - music_gen
+      - background_remove
+      - upscale
+    tools_available:
+      - image_selector
+      - tts_selector
+      - video_selector
+      - subtitle_gen
+      - music_gen
+      - background_remove
+      - upscale
+    checkpoint_required: true
+    human_approval_default: true
+    review_focus:
+      - Generated product depictions match the approved source images
+      - Image pack includes commerce hero, context, detail, scale, and thumbnail assets
+      - UGC person has consent/provenance or is clearly synthetic and disclosed
+      - No trademark, packaging, accessory, UI, result, or certification is invented
+      - Per-asset costs remain within approved budget
+      - Contact sheet makes all takes easy to compare before render
+    success_criteria:
+      - Schema-valid asset manifest with provenance, provider, model, prompt, seed, cost, and source linkage
+      - All referenced files exist under the project workspace
+      - Assets checkpoint remains awaiting_human until explicit scene-by-scene approval
+
+  - name: edit
+    skill: pipelines/product-ugc/edit-director
+    required_artifacts_in:
+      - proposal_packet
+      - script
+      - scene_plan
+      - asset_manifest
+    produces:
+      - edit_decisions
+    tools_available: []
+    checkpoint_required: true
+    human_approval_default: false
+    review_focus:
+      - Hook, product demonstration, proof, and CTA have intentional pacing
+      - Captions remain inside mobile safe areas and readable at phone size
+      - Commercial and AIGC disclosure remains visible long enough
+      - Audio mix prioritizes speech and product sounds
+      - Approved runtime and authoring mode are preserved without substitution
+    success_criteria:
+      - Schema-valid edit decisions cover the complete absolute timeline
+      - No unapproved asset or claim appears in the edit
+      - Product remains visually primary
+
+  - name: compose
+    skill: pipelines/product-ugc/compose-director
+    required_artifacts_in:
+      - proposal_packet
+      - script
+      - scene_plan
+      - asset_manifest
+      - edit_decisions
+    produces:
+      - render_report
+      - final_review
+    required_tools:
+      - video_compose
+    optional_tools:
+      - audio_mixer
+      - video_stitch
+      - color_grade
+      - upscale
+    tools_available:
+      - video_compose
+      - hyperframes_compose
+      - audio_mixer
+      - video_stitch
+      - color_grade
+      - upscale
+    checkpoint_required: true
+    human_approval_default: false
+    review_focus:
+      - Proposal packet and full scene plan are passed into the governed render
+      - Render is 1080x1920 unless proposal specifies an approved variant
+      - Contact sheet, 2-FPS motion stream, freeze/repetition, black frame, transcript, subtitles, loudness, and true peak are checked
+      - Product remains faithful to approved imagery across all frames
+      - final_review status is pass; revise and fail block delivery
+    success_criteria:
+      - Schema-valid render report and final review
+      - Final review status is exactly pass
+      - Render, thumbnail, captions, and image pack paths exist under the project
+
+  - name: publish
+    skill: pipelines/product-ugc/publish-director
+    required_artifacts_in:
+      - proposal_packet
+      - render_report
+      - final_review
+    optional_artifacts_in:
+      - script
+      - asset_manifest
+    produces:
+      - publish_log
+    tools_available:
+      - export_bundle
+    checkpoint_required: true
+    human_approval_default: true
+    review_focus:
+      - Export contains video, thumbnail, image pack, captions, disclosure text, and metadata
+      - No platform upload occurs from OpenMontage
+      - ShopSIN handoff identifies product ID and intended channel variants
+      - Final review passed and human publish approval is recorded
+    success_criteria:
+      - Schema-valid publish log
+      - Export bundle is complete and points back to the ShopSIN product and creative job
+      - Publishing remains a separate ShopSIN/TikTok Shop action

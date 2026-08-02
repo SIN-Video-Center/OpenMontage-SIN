@@ -881,6 +881,35 @@ def test_video_compose_blocks_hyperframes_when_runtime_unavailable(
     result = VideoCompose().execute(
         {
             "operation": "render",
+            "proposal_packet": {
+                "production_plan": {
+                    "render_runtime": "hyperframes",
+                    "composition_mode": "templated",
+                    "renderer_family": "animation-first",
+                    "quality_tier": "standard",
+                    "delivery_kind": "digital",
+                    "motion_expectation": "standard",
+                }
+            },
+            "scene_plan": {
+                "quality_tier": "standard",
+                "delivery_kind": "digital",
+                "motion_expectation": "standard",
+                "scenes": [
+                    {
+                        "id": "s1",
+                        "type": "animation",
+                        "start_seconds": 0,
+                        "end_seconds": 3,
+                        "primary_subject": "test",
+                        "visual_state_before": "before",
+                        "visual_action": "action",
+                        "visual_state_after": "after",
+                        "motion_class": "animation",
+                        "semantic_purpose": "test",
+                    }
+                ],
+            },
             "edit_decisions": {
                 "version": "1.0",
                 "cuts": [
@@ -892,6 +921,7 @@ def test_video_compose_blocks_hyperframes_when_runtime_unavailable(
                     }
                 ],
                 "render_runtime": "hyperframes",
+                "composition_mode": "templated",
                 "renderer_family": "animation-first",
             },
             "asset_manifest": {"assets": [{"id": "a1", "path": "does-not-matter.png"}]},
@@ -913,10 +943,42 @@ def test_video_compose_honors_hyperframes_runtime_before_atelier_mode(
     monkeypatch.setattr(
         VideoCompose, "_hyperframes_available", lambda self: False, raising=True
     )
+    monkeypatch.setattr(
+        VideoCompose, "_pre_compose_validation", lambda *a, **k: None, raising=True
+    )
 
     result = VideoCompose().execute(
         {
             "operation": "render",
+            "proposal_packet": {
+                "production_plan": {
+                    "render_runtime": "hyperframes",
+                    "composition_mode": "atelier",
+                    "renderer_family": "animation-first",
+                    "quality_tier": "standard",
+                    "delivery_kind": "digital",
+                    "motion_expectation": "standard",
+                }
+            },
+            "scene_plan": {
+                "quality_tier": "standard",
+                "delivery_kind": "digital",
+                "motion_expectation": "standard",
+                "scenes": [
+                    {
+                        "id": "s1",
+                        "type": "animation",
+                        "start_seconds": 0,
+                        "end_seconds": 3,
+                        "primary_subject": "test",
+                        "visual_state_before": "before",
+                        "visual_action": "action",
+                        "visual_state_after": "after",
+                        "motion_class": "animation",
+                        "semantic_purpose": "test",
+                    }
+                ],
+            },
             "edit_decisions": {
                 "version": "1.0",
                 "cuts": [
@@ -1050,6 +1112,42 @@ def test_scaffold_rejects_empty_cuts(tmp_path: Path):
     )
     assert not result.success
     assert "cuts" in (result.error or "").lower()
+
+
+def test_scaffold_rejects_atelier_mode(tmp_path: Path):
+    workspace = tmp_path / "hyperframes"
+    workspace.mkdir()
+    (workspace / "index.html").write_text("<main></main>", encoding="utf-8")
+
+    result = HyperFramesCompose().execute(
+        {
+            "operation": "scaffold_workspace",
+            "workspace_path": str(workspace),
+            "edit_decisions": {
+                "version": "1.0",
+                "renderer_family": "bespoke",
+                "render_runtime": "hyperframes",
+                "composition_mode": "atelier",
+                "total_duration_seconds": 5,
+                "bespoke": {
+                    "workspace_path": str(workspace),
+                    "art_direction": "Project-specific editorial motion",
+                    "scene_inventory": [
+                        {
+                            "scene_id": "s1",
+                            "primary_subject": "evidence field",
+                            "signature_device_present": False,
+                        }
+                    ],
+                },
+            },
+            "asset_manifest": {"assets": []},
+        }
+    )
+
+    assert not result.success
+    assert "forbidden" in (result.error or "").lower()
+    assert (workspace / "index.html").read_text(encoding="utf-8") == "<main></main>"
 
 
 # ------------------------------------------------------------------

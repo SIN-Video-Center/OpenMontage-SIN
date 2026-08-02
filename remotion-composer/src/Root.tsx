@@ -127,10 +127,14 @@ const calculateMetadata: CalculateMetadataFunction<ExplainerProps> = async ({
   if (cuts.length === 0) {
     return { durationInFrames: 30 * 60 };
   }
-  // Calculate total duration by summing cut durations (out_seconds - in_seconds)
-  // Each cut's in_seconds/out_seconds are RELATIVE to that cut, not absolute.
-  const totalDuration = cuts.reduce((acc, c) => acc + ((c.out_seconds || 0) - (c.in_seconds || 0)), 0);
-  // Add 1 second padding for final fade
+  // Cuts use absolute positions on the final timeline. The composition therefore
+  // ends at the greatest out_seconds value; summing durations would over-count
+  // overlaps and contradict Explainer.tsx, which sequences each cut from in_seconds.
+  const totalDuration = cuts.reduce(
+    (maxEnd, c) => Math.max(maxEnd, Number(c.out_seconds) || 0),
+    0,
+  );
+  // Add 1 second padding for the final fade.
   return { durationInFrames: Math.ceil((totalDuration + 1) * 30) };
 };
 

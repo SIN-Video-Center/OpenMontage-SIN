@@ -93,16 +93,66 @@ def test_high_level_render_forwards_timeout_to_remotion(tool, tmp_path, monkeypa
         return ToolResult(success=True, data={}, artifacts=[])
 
     monkeypatch.setattr(tool, "_remotion_render", fake_remotion_render)
-    monkeypatch.setattr(tool, "_run_final_review", lambda *a, **k: {})
+    monkeypatch.setattr(
+        tool,
+        "_run_final_review",
+        lambda *a, **k: {"status": "pass", "issues_found": [], "checks": {}},
+    )
+
+    asset_path = tmp_path / "a1.mp4"
+    asset_path.write_bytes(b"test-fixture")
 
     tool._render(
         {
+            "proposal_packet": {
+                "production_plan": {
+                    "quality_tier": "standard",
+                    "render_runtime": "remotion",
+                    "composition_mode": "templated",
+                    "renderer_family": "explainer-data",
+                    "delivery_kind": "digital",
+                    "motion_expectation": "standard",
+                }
+            },
+            "scene_plan": {
+                "quality_tier": "standard",
+                "delivery_kind": "digital",
+                "motion_expectation": "standard",
+                "scenes": [
+                    {
+                        "id": "s1",
+                        "type": "video",
+                        "start_seconds": 0,
+                        "end_seconds": 2,
+                        "primary_subject": "demo clip",
+                        "visual_state_before": "clip begins",
+                        "visual_action": "clip advances",
+                        "visual_state_after": "clip ends",
+                        "motion_class": "source_motion",
+                        "semantic_purpose": "demonstrate timeout forwarding",
+                    }
+                ],
+            },
             "edit_decisions": {
                 "render_runtime": "remotion",
                 "renderer_family": "explainer-data",
-                "cuts": [{"id": "c1", "source": "a1", "in_seconds": 0, "out_seconds": 2}],
+                "composition_mode": "templated",
+                "cuts": [
+                    {
+                        "id": "c1",
+                        "source": "a1",
+                        "in_seconds": 0,
+                        "out_seconds": 2,
+                        "motion_class": "source_motion",
+                        "primary_subject": "demo clip",
+                        "visual_state_before": "clip begins",
+                        "visual_action": "clip advances",
+                        "visual_state_after": "clip ends",
+                        "semantic_purpose": "demonstrate timeout forwarding",
+                    }
+                ],
             },
-            "asset_manifest": {"assets": [{"id": "a1", "path": "/tmp/a1.mp4"}]},
+            "asset_manifest": {"assets": [{"id": "a1", "path": str(asset_path)}]},
             "output_path": str(tmp_path / "out.mp4"),
             "remotion_timeout_ms": 120000,
         }

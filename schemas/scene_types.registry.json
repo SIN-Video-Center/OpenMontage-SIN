@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0",
+  "description": "Canonical scene and motion vocabulary shared by scene planning, EDL validation, renderer documentation, and contract tests.",
+  "scene_types": [
+    "talking_head",
+    "broll",
+    "video",
+    "animation",
+    "character_scene",
+    "diagram",
+    "text_card",
+    "transition",
+    "generated",
+    "screen_recording",
+    "hero_title",
+    "stat_card",
+    "bar_chart",
+    "line_chart",
+    "pie_chart",
+    "kpi_grid",
+    "comparison",
+    "callout",
+    "progress_bar",
+    "anime_scene",
+    "terminal_scene",
+    "screenshot_scene"
+  ],
+  "templated_remotion_types": [
+    "text_card",
+    "hero_title",
+    "stat_card",
+    "callout",
+    "comparison",
+    "bar_chart",
+    "line_chart",
+    "pie_chart",
+    "kpi_grid",
+    "progress_bar",
+    "anime_scene",
+    "terminal_scene",
+    "screenshot_scene"
+  ],
+  "overlay_types": [
+    "section_title",
+    "stat_reveal",
+    "hero_title",
+    "provider_chip"
+  ],
+  "motion_classes": [
+    "source_motion",
+    "generated_motion",
+    "procedural_semantic_motion",
+    "character_motion",
+    "ui_interaction",
+    "camera_only",
+    "decorative_loop",
+    "static_hold"
+  ]
+}

@@ -29,6 +29,7 @@ interface KPIGridProps {
   positiveColor?: string;
   negativeColor?: string;
   animationStyle?: KPIAnimationStyle;
+  sceneDurationFrames?: number;
 }
 
 export const KPIGrid: React.FC<KPIGridProps> = ({
@@ -43,9 +44,11 @@ export const KPIGrid: React.FC<KPIGridProps> = ({
   positiveColor = "#10B981",
   negativeColor = "#EF4444",
   animationStyle = "count-up",
+  sceneDurationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationInFrames } = useVideoConfig();
+  const durationInFrames = sceneDurationFrames ?? compositionDurationInFrames;
 
   const cols = Math.min(columns, metrics.length);
   const rows = Math.ceil(metrics.length / cols);

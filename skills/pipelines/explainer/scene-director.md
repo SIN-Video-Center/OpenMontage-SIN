@@ -17,6 +17,18 @@ This is where words become visuals. A great script with a bad scene plan produce
 
 ## Process
 
+### Step 0: Preserve the Approved Production Contract
+
+Copy these fields from `proposal_packet.production_plan` into the top level of `scene_plan` without reinterpretation:
+
+- `quality_tier`
+- `delivery_kind`
+- `motion_expectation`
+
+Read `schemas/scene_types.registry.json` as the canonical vocabulary. Do not invent a scene type that is absent from the registry and do not maintain a private scene-type list.
+
+For `quality_tier="hero"`, the scene plan describes a bespoke film. Stock Remotion component names may appear only in a separate animatic plan, never as the creative specification for the final.
+
 ### Step 1: Analyze the Script
 
 Read every section. For each, note:
@@ -48,6 +60,17 @@ Transform each script section into 1-3 visual scenes. Each scene is a distinct v
   "start_seconds": 15,
   "end_seconds": 22,
   "script_section_id": "s3",
+  "spoken_phrase": "The query becomes a vector, then the nearest matches are ranked.",
+  "primary_subject": "Query token stream and encoder",
+  "visual_state_before": "Only the raw query is visible.",
+  "visual_action": "The query splits into tokens, enters the encoder, and exits as a vector that travels into the index.",
+  "visual_state_after": "Ranked nearest-neighbour results surround the query vector.",
+  "motion_class": "procedural_semantic_motion",
+  "semantic_purpose": "Make the transformation and retrieval relationship visible.",
+  "entrance": "mask reveal",
+  "build": "token flow synchronized to the words query, vector, ranked",
+  "hold_ms": 500,
+  "exit": "camera follows the winning result",
   "framing": "full-screen diagram, centered",
   "movement": "progressive reveal left-to-right",
   "transition_in": "fade",
@@ -84,7 +107,33 @@ Transform each script section into 1-3 visual scenes. Each scene is a distinct v
 | `broll` | Context, real-world examples | Stock or generated footage | 3-6s |
 | `screen_recording` | Code demos, UI walkthroughs | Recorded or simulated | 5-15s |
 
-**Zero-key scene selection:** When no image/video generation is available, prefer `hero_title`, `stat_card`, `bar_chart`, `line_chart`, `pie_chart`, `kpi_grid`, `comparison`, `callout`, `progress_bar`, and `text_card`. These render entirely from Remotion components with zero external dependencies and can still feel distinct if you derive color, typography, and pacing from the subject instead of defaulting to a generic dashboard aesthetic.
+**Zero-key scene selection:** For a draft or approved standard templated production, `hero_title`, `stat_card`, charts, `comparison`, `callout`, `progress_bar`, and `text_card` can render without external generation. They still require a progressive semantic build. For hero work, lack of generation credentials is a blocker or a reason to choose a bespoke procedural concept; it is not permission to downgrade the final to a stock card sequence.
+
+### Step 3b: Build the Mandatory Visual Beat Map
+
+Every spoken claim must cause a concrete visual state change. Each scene therefore requires:
+
+- `visual_state_before`
+- `visual_action`
+- `visual_state_after`
+- `motion_class`
+- `semantic_purpose`
+- `primary_subject`
+- entrance, build, hold, exit, synchronization word/timecode, and sound accent where applicable
+
+Allowed motion classes come from `schemas/scene_types.registry.json`:
+
+- Semantic: `source_motion`, `generated_motion`, `procedural_semantic_motion`, `character_motion`, `ui_interaction`
+- Weak/non-semantic: `camera_only`, `decorative_loop`, `static_hold`
+
+A zoom, pan, glow loop, or moving background alone does not explain the narration. Charts count as semantic motion only when data, relationships, or states progressively build with the spoken beat.
+
+Hard gates for presentable/hero work:
+
+- At least 80% of spoken time has semantic visual change.
+- Camera-only/decorative motion is at most 25% of the timeline.
+- No unplanned non-semantic hold exceeds 2.5 seconds.
+- Every generated/source-motion clip must match the action of the spoken beat, not merely the topic.
 
 ### Step 4: Apply the Visual Technique Library
 
@@ -193,10 +242,12 @@ The style playbook constrains your visual choices:
 ### Step 6: Verify Coverage and Variety
 
 **Coverage check:**
-- [ ] Scenes span the full script duration (first scene starts at 0s, last scene ends at total_duration)
-- [ ] Every script section has at least one corresponding scene
-- [ ] No gaps > 1s between scenes (unless intentional beat)
-- [ ] All enhancement cues from the script are addressed by a scene or required_asset
+- [ ] Scene timestamps are absolute positions on the final timeline.
+- [ ] Scenes span the full script duration (first scene starts at 0s, last scene ends at total_duration).
+- [ ] Every script section has at least one corresponding scene.
+- [ ] No gaps > 1s between scenes unless the gap is an intentional, documented beat.
+- [ ] Every spoken claim has before/action/after visual states and a semantic purpose.
+- [ ] All enhancement cues from the script are addressed by a scene or required_asset.
 
 **Variety check:**
 - [ ] No more than 3 consecutive scenes of the same type
@@ -247,3 +298,20 @@ This stage gates on human approval (`human_approval_default: true`). After revie
 checkpoint with `status="awaiting_human"`, present the summary (the Backlot board renders
 the artifact), and **END YOUR TURN**. Do not start the next stage in the same response.
 Approval is per-gate — an earlier "go ahead" does not cover this gate.
+
+## Caption-safe scene planning
+
+Before approving a scene, declare `protected_regions` and `caption_layout` as
+specified in `docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`. Protected regions include
+not only static subjects but the full path of an animation throughout the scene.
+For a bottom reserved rail, no meaningful visual may enter the lower reserved
+fraction at any time. Plan visual actions and caption phrases from the same spoken
+beat so the viewer never has to choose between reading and understanding the
+animation.
+
+Viewer-facing German text must use Unicode NFC and correct spelling. Do not put
+ASCII substitutes into scene descriptions, labels, diagrams, or UI mockups.
+
+## Overview-Video category overlay
+
+For `overview-video`, use actual UI evidence as the primary material and motion graphics to explain relationships. Reserve the lower reading field geometrically, keep complete meaningful motion paths above it, and continue the scene background through the field. Plan headline line breaks and representative-frame review; a full-width caption bar is forbidden.

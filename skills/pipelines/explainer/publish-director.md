@@ -11,16 +11,27 @@ This is where a great video reaches its audience. Without proper metadata and pa
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Schema | `schemas/artifacts/publish_log.schema.json` | Artifact validation |
-| Prior artifacts | `state.artifacts["compose"]["render_report"]`, `state.artifacts["proposal"]["proposal_packet"]`, `state.artifacts["research"]["research_brief"]` | Video file and original proposal |
+| Prior artifacts | `state.artifacts["compose"]["render_report"]`, `state.artifacts["compose"]["final_review"]`, `state.artifacts["proposal"]["proposal_packet"]`, `state.artifacts["research"]["research_brief"]` | Passed video, measured final review, and original proposal |
 | Playbook | Active style playbook | Visual style for thumbnail |
 
 ## Process
+
+### Step 0: Enforce the Final-Review Gate
+
+Read the compose-stage `final_review` before generating metadata or exports. Proceed only when:
+
+```text
+final_review.status == "pass"
+```
+
+`revise`, `fail`, a missing final review, or an unsuccessful compose result blocks publishing. Human approval does not waive container, runtime, delivery-promise, freeze/repetition, transcript, audio, subtitle, or other critical render findings.
 
 ### Step 1: Gather Context
 
 Collect everything needed for metadata:
 - **Proposal packet**: title, hook, key points, target platform, tone
 - **Render report**: output path, duration, resolution
+- **Final review**: status `pass`, measured render findings, transcript/audio/subtitle verification
 - **Script**: section summaries for description/chapters
 
 ### Step 2: Generate SEO Metadata
@@ -153,7 +164,7 @@ If any dimension scores below 3, revise.
 
 ### Step 8: Submit
 
-Validate the publish_log against the schema and persist via checkpoint.
+Reconfirm `final_review.status == "pass"`, validate the publish_log against the schema, and persist via checkpoint.
 
 ## Common Pitfalls
 
@@ -171,3 +182,7 @@ This stage gates on human approval (`human_approval_default: true`). After revie
 checkpoint with `status="awaiting_human"`, present the summary (the Backlot board renders
 the artifact), and **END YOUR TURN**. Do not start the next stage in the same response.
 Approval is per-gate — an earlier "go ahead" does not cover this gate.
+
+## Video-category publishing gate
+
+Do not publish unless `final_review.checks.promise_preservation.category_contract_honored=true`. For `overview-video`, require verified rendered pronunciation and an integrated caption field with no full-width bar.

@@ -29,6 +29,7 @@ interface ProgressBarProps {
   textColor?: string;
   labelFontSize?: number;
   percentageFontSize?: number;
+  sceneDurationFrames?: number;
 }
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({
@@ -46,9 +47,11 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   textColor = "#1F2937",
   labelFontSize = 36,
   percentageFontSize = 28,
+  sceneDurationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationInFrames } = useVideoConfig();
+  const durationInFrames = sceneDurationFrames ?? compositionDurationInFrames;
 
   const clampedProgress = Math.max(0, Math.min(100, progress));
 

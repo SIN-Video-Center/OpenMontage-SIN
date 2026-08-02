@@ -2,10 +2,14 @@
 
 ## When to Use
 
-Use FFmpeg-backed tools for any video/audio processing that does not require AI inference:
-cutting, trimming, speed adjustment, concatenation, audio extraction, mixing,
-subtitle burn-in, overlay compositing, encoding, face enhancement, color grading,
-and audio cleanup.
+Use FFmpeg-backed tools for deterministic media processing such as cutting,
+trimming, speed adjustment, sequential concatenation, audio extraction/mixing,
+subtitle burn-in, encoding, face enhancement, color grading, and audio cleanup.
+
+For a governed final composition, FFmpeg is used only when
+`proposal_packet.production_plan.render_runtime="ffmpeg"`. It is not an automatic
+fallback from Remotion or HyperFrames and must not silently turn an approved hero or
+motion-led concept into a still-image/Ken-Burns render.
 
 ## Tools That Use FFmpeg
 
@@ -14,7 +18,7 @@ and audio cleanup.
 | Tool | Capability |
 |------|-----------|
 | `video_trimmer` | Cut, trim, speed adjust, concat video segments |
-| `video_compose` | Full composition: cuts + subtitles + overlays + encode |
+| `video_compose` | Governed sequential FFmpeg composition when explicitly approved; rejects unsupported gaps/overlaps and still runs blocking final review |
 | `audio_mixer` | Mix speech/music/SFX, ducking, fades, extract audio |
 | `frame_sampler` | Extract representative frames from video |
 
@@ -75,13 +79,23 @@ The `clean_speech` preset targets -16 LUFS with 11 LU range — good for YouTube
 - Use `sidechaincompress` with speech as the key signal to lower music volume during dialogue.
 - Typical settings: threshold=0.02, ratio=9, attack=200ms, release=500ms.
 
-### Concatenation
+### Absolute Timeline and Concatenation
 
+- `in_seconds`/`out_seconds` are absolute positions in the finished video.
+- `source_in_seconds` is the seek/trim position inside source media.
+- Sequential FFmpeg composition requires each primary cut to begin where the prior
+  cut ends. Unsupported gaps or overlaps are blockers; use the approved capable
+  timeline runtime or explicitly fill the gap.
 - Use the concat demuxer (`-f concat -safe 0`) for same-codec segments.
 - For mixed codecs or different resolutions, re-encode all segments first.
 
 ## Quality Checklist
 
+- [ ] FFmpeg was explicitly approved as `render_runtime`; no runtime downgrade occurred.
+- [ ] Absolute final-timeline placement and `source_in_seconds` trims are correct.
+- [ ] No unsupported gap or overlap was hidden by sequential concat.
+- [ ] Governed `video_compose operation="render"` received proposal, approved script,
+      complete scene plan, and EDL, and `final_review.status == "pass"`.
 - [ ] Output plays without artifacts on desktop and mobile
 - [ ] Audio and video remain in sync after processing
 - [ ] Subtitles are in the bottom 20% of frame, never covering the face

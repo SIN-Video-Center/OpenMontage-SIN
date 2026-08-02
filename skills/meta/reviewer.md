@@ -84,7 +84,7 @@ Count findings by severity:
 |----------|--------|
 | 0 critical, any suggestions/nitpicks | **Pass** — proceed to checkpoint. Note suggestions for the record. |
 | 1+ critical findings | **Revise** — fix all critical findings, then re-review (max 2 rounds). |
-| After 2 revision rounds, still critical | **Pass with warnings** — proceed anyway, note unresolved issues. Never block indefinitely. |
+| After 2 revision rounds, still critical | **Block/escalate** for compose, publish, hero, presentable, or broadcast work. `PASS_WITH_WARNINGS` is allowed only for draft/low-stakes intermediate artifacts and never overrides schema, delivery-promise, runtime, or final-review failures. |
 
 ### Step 7: Record Review
 
@@ -121,7 +121,7 @@ Structure your review as:
 
 2. **Critical means critical.** Don't inflate severity. A missing schema field is critical. A slightly wordy paragraph is a suggestion. A comma splice is a nitpick.
 
-3. **Two rounds max.** The goal is shipping, not perfection. After two revision rounds, pass with warnings and move on. Perfectionism kills pipelines.
+3. **Two autonomous revision rounds max.** After two rounds, escalate unresolved critical findings instead of silently shipping. Final renders, hero work, presentable/broadcast work, schema failures, delivery-promise failures, runtime swaps, and `final_review.status != pass` remain blocked.
 
 4. **Review the artifact, not the process.** You're checking the output, not how it was produced. If the brief is compelling, it doesn't matter if the agent used an unusual approach.
 
@@ -180,9 +180,10 @@ Run at **scene_plan** and **edit** stages. Use `lib/slideshow_risk.py` to comput
 
 ### At scene_plan stage:
 1. Compute `score_slideshow_risk(scenes, renderer_family=renderer_family)`
-2. If verdict is **"fail"** (average ≥ 4.0): **CRITICAL** — scene plan must be revised before proceeding
-3. If verdict is **"revise"** (average ≥ 3.0): **SUGGESTION** — flag specific dimensions scoring ≥ 3.5
-4. If verdict is **"strong"** or **"acceptable"**: note in review summary, no finding needed
+2. If verdict is **"fail"** (average ≥ 4.0): **CRITICAL** — scene plan must be revised before proceeding.
+3. If verdict is **"revise"** (average ≥ 3.0): **CRITICAL** for hero, atelier, presentable, or broadcast work; **SUGGESTION** only for an explicitly approved draft/animatic. Flag every dimension scoring ≥ 3.0.
+4. For hero/atelier final work, an average ≥ 2.0 is **CRITICAL** even when the generic verdict is `acceptable`.
+5. If verdict is **"strong"**, or `acceptable` below the applicable quality threshold: note it in the review summary.
 
 ### At edit stage:
 1. Recompute with full edit_decisions: `score_slideshow_risk(scenes, edit_decisions, renderer_family)`
@@ -227,9 +228,11 @@ Run at **every stage** after proposal. The decision log (`schemas/artifacts/deci
 Run at **scene_plan** and **edit** stages. Prevents the "every video looks the same" failure mode.
 
 ### Checks:
-1. **Variation check** (scene_plan only): Use `lib/variation_checker.py` → `check_scene_variation(scenes)`.
-   - If verdict is "poor" (score ≤ 2): **CRITICAL** — "Scene plan lacks variety: [list violations]"
-   - If verdict is "fair" (score ≤ 3): **SUGGESTION** — note specific suggestions from the checker
+1. **Variation check** (scene_plan only): Use `lib/variation_checker.py` → `check_scene_variation(scenes)`. Lower scores are better and the only valid verdicts are `strong`, `acceptable`, `revise`, and `fail`.
+   - `fail` (score ≥ 4.0): **CRITICAL** — "Scene plan lacks variety: [list violations]"
+   - `revise` (score ≥ 3.0): **CRITICAL** for hero/atelier/presentable/broadcast work; otherwise **SUGGESTION** for a draft.
+   - `acceptable` (score ≥ 2.0): **SUGGESTION** for hero/atelier work; otherwise record it without blocking.
+   - `strong` (score < 2.0): pass.
 
 2. **Playbook alignment**: Is the active playbook appropriate for this content?
    - Cinematic trailer using "clean-professional" theme → flag mismatch
@@ -301,8 +304,8 @@ Run at **compose** and **publish** stages. Ensures the agent reviewed the actual
    - If missing: **CRITICAL** — "Compose produced a render_report but no final_review. The agent must inspect the rendered output before presenting it."
 2. **Status check**: What is `final_review.status`?
    - `pass` → OK, proceed
-   - `revise` → The agent should have fixed issues before presenting. If the pipeline continued anyway: **CRITICAL** — "Self-review found revise-worthy issues but the agent presented anyway."
-   - `fail` → The pipeline MUST NOT proceed. If it did: **CRITICAL**
+   - `revise` → The pipeline MUST NOT present, publish, or return success. Re-render and re-review. Continuing is **CRITICAL**.
+   - `fail` → The pipeline MUST NOT proceed. Continuing is **CRITICAL**.
 3. **Check completeness**: All 5 required checks must have data:
    - `technical_probe` must show a valid container with plausible duration/resolution
    - `visual_spotcheck` must have `frames_sampled >= 4`
@@ -352,3 +355,21 @@ The templated→atelier inversion (`AGENT_GUIDE.md` → "Composition Authoring M
 
 ### At publish stage (when composition_mode == "atelier"):
 1. All six atelier compose-stage checks above (existence of `atelier` block, stock_reuse, art_direction_declared, scene_distinctness, captions/text dedup, human distinctness review) must show `resolved` in the review record. Any unresolved: **CRITICAL** — "Cannot publish atelier piece with unresolved doctrine or distinctness findings."
+
+## Mandatory caption occlusion and language review
+
+At scene-plan, edit, compose, and publish review, apply
+`docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`:
+
+- Missing scene `protected_regions` or caption placement: **CRITICAL**.
+- Enabled subtitles without a declared layout policy and reserved rail/adaptive
+  zones: **CRITICAL**.
+- Any caption overlap with a subject, chart, diagram, label, interface control,
+  face, or animation path: **CRITICAL**; recompose and re-render.
+- `final_review.subtitle_check.occlusion_free != true` or
+  `collision_count > 0`: **CRITICAL**.
+- German ASCII substitutions such as `waehlen`, `souveraen`, or
+  `eigenstaendig`, non-NFC text, spelling errors, or grammar errors in
+  viewer-facing copy: **CRITICAL**.
+- Caption timing that does not match the final spoken phrase and corresponding
+  visual action: **CRITICAL** for final delivery.
