@@ -40,3 +40,13 @@ External plugins and production repositories are not touched by an OpenMontage c
 - Core fork: `Delqhi/OpenMontage-SIN`
 - Overview plugin: `Delqhi/openmontage-overview-video`
 - Reference production: `Delqhi/openafd-overview-video`
+
+### Automated fork synchronization
+
+On the SIN production branch, run:
+
+```bash
+./scripts/sync_sin_upstream.sh
+```
+
+The helper refuses a dirty worktree, fast-forwards the fork mirror, merges upstream into the production branch, runs the binding extension/Overview tests, and pushes only after they pass.
