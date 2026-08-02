@@ -97,3 +97,6 @@ venv/
 
 # Backlot local cache (thumbnails)
 .backlot/
+
+# Machine-local external plugin registry
+.openmontage/
