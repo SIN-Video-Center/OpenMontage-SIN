@@ -177,6 +177,29 @@ The final is blocked unless all are true:
 - no black frames, freezes, missing assets, clipping or wrong audio;
 - contact sheet and rendered-audio transcript were inspected.
 
+
+## Hook, performance, and retention gates
+
+Read `docs/EDITORIAL_PERFORMANCE_AND_RETENTION.md`. The 0–3 second hook window is a
+separate reviewed deliverable. It must contain tension and visible product proof, not a
+logo, chapter card, scene number, or generic setup. Hero narration requires a playable
+performance plan and a human listening decision; ASR alone verifies words, not
+persuasion.
+
+## Frame discipline and rendered learning loop
+
+- Real UI that proves a claim occupies at least 45% of frame width or 35% of frame area.
+- Evidence labels are 32–44 px at 1080p and remain physically attached to the subject.
+- Never place two similar full UI screenshots side by side when neither remains readable.
+- Decorative nested frames, rounded outline stacks, chapter counters, and visual
+  scaffolding are blocking defects.
+- Hero/Overview compose must run `visual_review_loop` on 0–3 second hook frames and
+  at least two representative frames per scene.
+- Store `visual_review.json` and `revision_brief.md`; revise and rerender when the gate
+  reports `revise`.
+- Maximum automatic iterations: three. Final delivery still requires human viewing and
+  listening approval.
+
 ## Reference project
 
 `projects/openafd-v3-motion-led` is the first category reference project. It is not accepted as a reference until its governed final review reports `pass` against this document.

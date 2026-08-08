@@ -438,6 +438,50 @@
         "overview-video"
       ],
       "description": "Approved viewer-facing category copied from proposal and scene plan."
+    },
+    "semantic_visual_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "max_iterations",
+        "hook_window_seconds",
+        "minimum_frames",
+        "human_approval_required"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "hook_window_seconds": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "minimum_frames": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 16
+        },
+        "human_approval_required": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "allOf": [
@@ -546,7 +590,8 @@
       },
       "then": {
         "required": [
-          "subtitles"
+          "subtitles",
+          "semantic_visual_review"
         ],
         "properties": {
           "subtitles": {
@@ -573,6 +618,25 @@
                 ]
               }
             ]
+          },
+          "semantic_visual_review": {
+            "properties": {
+              "required": {
+                "const": true
+              },
+              "max_iterations": {
+                "maximum": 3
+              },
+              "hook_window_seconds": {
+                "maximum": 3
+              },
+              "minimum_frames": {
+                "minimum": 8
+              },
+              "human_approval_required": {
+                "const": true
+              }
+            }
           }
         }
       }

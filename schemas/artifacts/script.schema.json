@@ -128,6 +128,28 @@
               "provider_text": {
                 "type": "string",
                 "description": "Provider-ready narration text, including purposeful punctuation or SSML break tags when supported."
+              },
+              "intent": {
+                "type": "string"
+              },
+              "stance": {
+                "type": "string"
+              },
+              "operative_words": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pause_plan": {
+                "type": "string"
+              },
+              "energy_curve": {
+                "type": "string"
+              },
+              "visual_landing": {
+                "type": "string"
               }
             },
             "additionalProperties": false
@@ -211,6 +233,71 @@
     },
     "metadata": {
       "type": "object"
+    },
+    "hook_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hook_type",
+        "window_seconds",
+        "candidates",
+        "selected_candidate_id",
+        "first_visual_proof_seconds"
+      ],
+      "properties": {
+        "hook_type": {
+          "type": "string",
+          "enum": [
+            "evidence_gap",
+            "consequence",
+            "contradiction",
+            "question",
+            "before_after",
+            "surprising_proof"
+          ]
+        },
+        "window_seconds": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "candidates": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "spoken_text",
+              "visual_proof",
+              "why_it_earns_attention"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "spoken_text": {
+                "type": "string"
+              },
+              "visual_proof": {
+                "type": "string"
+              },
+              "why_it_earns_attention": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "selected_candidate_id": {
+          "type": "string"
+        },
+        "first_visual_proof_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        }
+      }
     }
   },
   "additionalProperties": false

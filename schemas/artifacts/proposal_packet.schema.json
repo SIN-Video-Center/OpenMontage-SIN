@@ -37,7 +37,7 @@
           },
           "title": {
             "type": "string",
-            "description": "Specific, compelling — not generic"
+            "description": "Specific, compelling \u2014 not generic"
           },
           "hook": {
             "type": "string",
@@ -61,7 +61,7 @@
           },
           "visual_approach": {
             "type": "string",
-            "description": "Primary visual strategy — specific enough to guide scene planning"
+            "description": "Primary visual strategy \u2014 specific enough to guide scene planning"
           },
           "suggested_playbook": {
             "type": "string",
@@ -91,7 +91,7 @@
               "type": "string"
             },
             "minItems": 2,
-            "description": "Concrete claims the video will prove — not vague topics"
+            "description": "Concrete claims the video will prove \u2014 not vague topics"
           },
           "core_message": {
             "type": "string",
@@ -99,7 +99,7 @@
           },
           "cta": {
             "type": "string",
-            "description": "Call to action — specific and relevant"
+            "description": "Call to action \u2014 specific and relevant"
           },
           "tone": {
             "type": "string"
@@ -113,7 +113,7 @@
           },
           "why_this_works": {
             "type": "string",
-            "description": "Rationale citing research findings — not vibes"
+            "description": "Rationale citing research findings \u2014 not vibes"
           }
         },
         "additionalProperties": false
@@ -380,7 +380,7 @@
             "animation-first",
             "bespoke"
           ],
-          "description": "Locked at proposal stage — compose cannot change without logging a decision. This is the creative grammar, NOT the technical engine."
+          "description": "Locked at proposal stage \u2014 compose cannot change without logging a decision. This is the creative grammar, NOT the technical engine."
         },
         "render_runtime": {
           "type": "string",
@@ -389,7 +389,7 @@
             "hyperframes",
             "ffmpeg"
           ],
-          "description": "Locked at proposal stage — the technical runtime that realizes renderer_family. remotion=React scene components, hyperframes=HTML/CSS/GSAP, ffmpeg=simple concat/trim. Must be explicit and auditable; silent swaps are forbidden."
+          "description": "Locked at proposal stage \u2014 the technical runtime that realizes renderer_family. remotion=React scene components, hyperframes=HTML/CSS/GSAP, ffmpeg=simple concat/trim. Must be explicit and auditable; silent swaps are forbidden."
         },
         "composition_mode": {
           "type": "string",
@@ -397,11 +397,11 @@
             "templated",
             "atelier"
           ],
-          "description": "Locked at proposal — HOW the composition is built (orthogonal to render_runtime). templated=assemble stock cut.type scenes (Explainer/CinematicRenderer); atelier=hand-author a project-local composition from scratch with no creative-component reuse. Default atelier for hero work. See AGENT_GUIDE.md → 'Composition Authoring Mode' and skills/meta/bespoke-composition.md. The decision MUST be logged in decision_log with category='composition_mode' and BOTH options presented."
+          "description": "Locked at proposal \u2014 HOW the composition is built (orthogonal to render_runtime). templated=assemble stock cut.type scenes (Explainer/CinematicRenderer); atelier=hand-author a project-local composition from scratch with no creative-component reuse. Default atelier for hero work. See AGENT_GUIDE.md \u2192 'Composition Authoring Mode' and skills/meta/bespoke-composition.md. The decision MUST be logged in decision_log with category='composition_mode' and BOTH options presented."
         },
         "art_direction": {
           "type": "string",
-          "description": "Required when composition_mode='atelier'. Short note (or path to art-direction.md) committing to a fresh visual language for THIS piece — palette, type, motion, signature device. Per skills/meta/bespoke-composition.md step 1, written down BEFORE authoring scenes."
+          "description": "Required when composition_mode='atelier'. Short note (or path to art-direction.md) committing to a fresh visual language for THIS piece \u2014 palette, type, motion, signature device. Per skills/meta/bespoke-composition.md step 1, written down BEFORE authoring scenes."
         },
         "taste_profile": {
           "$ref": "#/$defs/taste_profile"
@@ -466,6 +466,14 @@
             "sample_approval_required": {
               "type": "boolean",
               "description": "True when a TTS sample must be approved before batch narration generation."
+            },
+            "human_listening_required": {
+              "type": "boolean",
+              "description": "Hero narration requires a human listening decision after audition and final mix."
+            },
+            "performance_plan_required": {
+              "type": "boolean",
+              "description": "Require playable section-level intent, operative words, pauses, stance, and visual landings."
             }
           },
           "additionalProperties": false
@@ -615,6 +623,51 @@
             "overview-video"
           ],
           "description": "Viewer-facing category contract. Independent of pipeline, renderer family, composition mode, and runtime."
+        },
+        "semantic_visual_review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required",
+            "max_iterations",
+            "hook_window_seconds",
+            "minimum_frames",
+            "human_approval_required"
+          ],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "models": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "max_iterations": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "hook_window_seconds": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "minimum_frames": {
+              "type": "integer",
+              "minimum": 4,
+              "maximum": 16
+            },
+            "human_approval_required": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "description": "Rendered multi-frame semantic design review contract. It complements deterministic QA and never replaces human hero approval."
         }
       },
       "allOf": [
@@ -701,6 +754,44 @@
             "properties": {
               "composition_mode": {
                 "const": "atelier"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "video_category": {
+                "const": "overview-video"
+              }
+            },
+            "required": [
+              "video_category"
+            ]
+          },
+          "then": {
+            "required": [
+              "semantic_visual_review"
+            ],
+            "properties": {
+              "semantic_visual_review": {
+                "properties": {
+                  "required": {
+                    "const": true
+                  },
+                  "max_iterations": {
+                    "maximum": 3
+                  },
+                  "hook_window_seconds": {
+                    "maximum": 3
+                  },
+                  "minimum_frames": {
+                    "minimum": 8
+                  },
+                  "human_approval_required": {
+                    "const": true
+                  }
+                }
               }
             }
           }
