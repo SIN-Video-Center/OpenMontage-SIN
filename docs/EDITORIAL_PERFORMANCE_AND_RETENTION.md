@@ -88,6 +88,8 @@ Landscape hero defaults:
 
 ## 5. Visual editorial hierarchy
 
+Hero product/overview work also inherits `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`. Editorial hierarchy is judged first as a paused composition and then as motion: a representative proof frame must already have one clear focal subject, coherent surfaces, intentional negative space and readable evidence before animation is allowed to add energy.
+
 At 1920×1080:
 
 - the primary real-UI subject occupies at least 45% of frame width or 35% of frame area;
@@ -110,12 +112,24 @@ At 1920×1080:
   adding a visible outline;
 - if removing a frame changes no information, remove it.
 
+### Frame-first authoring gate
+
+Before full motion polish on hero/overview work:
+
+1. render at least one representative proof frame per scene;
+2. review the frames together as a keyframe board;
+3. reject generic dashboard showcases, repeated browser/device wrappers, equal-weight competing subjects, nested decorative frames and unresolved layouts;
+4. verify that the spoken claim's proof remains understandable with motion paused;
+5. only then finish motion, using one primary semantic event, subordinate support motion, restrained ambience and a readable settle state.
+
+Motion cannot compensate for a weak still. A scene that needs drift, glow, particles or constant zoom to feel finished must be recomposed.
+
 ## 6. Rendered learning loop
 
 Hero/Overview delivery uses a maximum three-iteration loop:
 
 1. render candidate;
-2. sample 0–3 second hook and at least two representative frames per scene;
+2. sample the 0–3 second hook and guarantee rendered evidence from every scene within the critic frame budget; for hero/overview review inspect at least 12 frames;
 3. run deterministic motion, freeze, black-frame, layout, caption, and audio checks;
 4. run a multimodal visual critic on the rendered evidence;
 5. write `visual_review.json` and `revision_brief.md` with frame/time-specific actions;

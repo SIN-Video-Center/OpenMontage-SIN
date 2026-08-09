@@ -96,14 +96,63 @@ def test_proposal_packet_schema_accepts_taste_profile():
 
 def test_taste_direction_is_discoverable_to_new_agents():
     skill_path = ROOT / "skills" / "meta" / "taste-direction.md"
+    premium_skill = ROOT / "skills" / "meta" / "product-film-art-direction.md"
+    premium_standard = ROOT / "docs" / "PREMIUM_PRODUCT_FILM_STANDARD.md"
     assert skill_path.is_file(), "Missing Layer 2 taste-direction meta skill"
+    assert premium_skill.is_file(), "Missing premium product-film art-direction meta skill"
+    assert premium_standard.is_file(), "Missing binding premium product-film standard"
 
     index = (ROOT / "skills" / "INDEX.md").read_text(encoding="utf-8")
     assert "Taste Direction" in index
     assert "meta/taste-direction.md" in index
+    assert "Product Film Art Direction" in index
+    assert "meta/product-film-art-direction.md" in index
 
     guide = (ROOT / "AGENT_GUIDE.md").read_text(encoding="utf-8")
     assert "taste-direction.md" in guide
+    assert "product-film-art-direction.md" in guide
+    assert "PREMIUM_PRODUCT_FILM_STANDARD.md" in guide
+
+
+def test_hero_proposal_requires_premium_taste_contract():
+    schema = _load_json(ROOT / "schemas" / "artifacts" / "proposal_packet.schema.json")
+    proposal = {
+        "version": "1.0",
+        "concept_options": [
+            {
+                "id": f"c{i}", "title": f"Concept {i}", "hook": "Proof first.",
+                "narrative_structure": "problem_solution", "visual_approach": "Bespoke product evidence.",
+                "target_duration_seconds": 60, "why_this_works": "Direct visual proof.",
+            }
+            for i in range(1, 4)
+        ],
+        "selected_concept": {"concept_id": "c1", "rationale": "Best fit."},
+        "production_plan": {
+            "pipeline": "animated-explainer", "stages": [], "quality_tier": "hero",
+            "delivery_kind": "bespoke", "motion_expectation": "cinematic",
+            "renderer_family": "bespoke", "render_runtime": "remotion",
+            "composition_mode": "atelier", "art_direction": "A brief-specific evidence-led visual world.",
+            "delivery_promise": {
+                "promise_type": "motion_led", "motion_required": True,
+                "tone_mode": "cinematic", "quality_floor": "broadcast",
+            },
+            "taste_profile": _taste_profile(),
+        },
+        "cost_estimate": {"total_estimated_usd": 0, "line_items": [], "budget_verdict": "no_budget_set"},
+        "approval": {"status": "approved"},
+    }
+    errors = list(jsonschema.Draft202012Validator(schema).iter_errors(proposal))
+    assert errors
+    proposal["production_plan"]["taste_profile"].update({
+        "focal_strategy": "One evidence subject owns each beat and hands focus to the next proof.",
+        "surface_system": "One project-specific material, edge, elevation, glow and depth system.",
+        "motion_grammar": "One semantic primary action, subordinate support motion, restrained ambience, readable settle.",
+        "transition_strategy": "Transfer attention through shared geometry or deliberate hard cuts.",
+        "keyframe_quality_floor": "premium-keyvisual",
+        "restraint_rules": ["No generic browser chrome", "No equal-energy continuous motion"],
+        "hero_moments": ["evidence transformation", "final synthesis"],
+    })
+    jsonschema.validate(instance=proposal, schema=schema)
 
 
 def test_premium_minimalist_playbook_exists_and_validates():

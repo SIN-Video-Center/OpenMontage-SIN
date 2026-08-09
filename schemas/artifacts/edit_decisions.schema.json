@@ -631,7 +631,7 @@
                 "maximum": 3
               },
               "minimum_frames": {
-                "minimum": 8
+                "minimum": 12
               },
               "human_approval_required": {
                 "const": true

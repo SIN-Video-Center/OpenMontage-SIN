@@ -269,6 +269,22 @@
         "palette_discipline": { "type": "string" },
         "layout_variation": { "type": "string" },
         "reference_strategy": { "type": "string" },
+        "focal_strategy": { "type": "string" },
+        "surface_system": { "type": "string" },
+        "motion_grammar": { "type": "string" },
+        "transition_strategy": { "type": "string" },
+        "keyframe_quality_floor": {
+          "type": "string",
+          "enum": ["functional", "editorial", "premium-keyvisual"]
+        },
+        "restraint_rules": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "hero_moments": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "anti_patterns": {
           "type": "array",
           "items": { "type": "string" }

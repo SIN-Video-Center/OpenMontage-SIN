@@ -6,7 +6,9 @@ look is written fresh so no two videos share a visual language.
 
 Read this whenever you've chosen **atelier mode** for a piece (see "When to use"). It does not
 hand you components — it routes you to the *principles, engine mechanics, and tool wiring* you
-need so that what you build is correct, and distinct.
+need so that what you build is correct, and distinct. For product/brand/launch hero work and every
+`overview-video`, also read **`skills/meta/product-film-art-direction.md`** and
+**`docs/PREMIUM_PRODUCT_FILM_STANDARD.md`** before scene authoring.
 
 > The single rule that governs everything below: **reuse engine knowledge, never creative
 > components.** How Remotion resolves an asset is engine knowledge — reuse it freely. How a
@@ -81,11 +83,38 @@ The reviewer enforces this as a "scene_distinctness" check (see
 each scene's primary subject + first frame, and an explicit answer to "do any two scenes
 share their primary visual subject?" Yes ⇒ CRITICAL ⇒ re-plan.
 
+For hero/product/overview work, scene planning also records the premium three-part contract from
+`product-film-art-direction.md`: `keyframe_contract`, `focus_path`, and `motion_hierarchy`. These are
+not prose garnish. They define the paused proof frame, the viewer's eye path, and the authored
+primary/secondary/ambient motion that the rendered critic will later inspect.
+
 The corollary: the per-scene plan is a *first-class artifact*, not implied. Write it down
 (in `art-direction.md` or a sibling `scenes.md`) before authoring `Composition.tsx`.
 
+### 1.75 Pass the static keyframe board before finishing motion
+
+For hero/product/overview work, author enough of each scene to render its declared proof state,
+then render a representative still per scene (two when the focal hierarchy changes materially).
+Review those stills as a board **before** polishing full animation.
+
+Block and recompose when a paused frame:
+
+- looks like a generic dashboard showcase, wireframe, template card stack, or debug UI;
+- has two equal-weight focal subjects without an explicit comparison purpose;
+- needs camera drift, glow or particles to feel finished;
+- repeats the same product-window silhouette/scale as neighboring scenes;
+- uses decorative chrome, frames or labels that add no meaning;
+- fails to make the spoken proof readable at delivery resolution.
+
+The rule is binding: **motion may animate a resolved hierarchy; it may not hide an unresolved one.**
+
 ### 2. Decide the motion language — principles, not presets
-Reach for **principle** skills, never finished animations:
+Reach for **principle** skills, never finished animations. For premium product work, author the
+motion hierarchy before individual tweens: one primary semantic event, subordinate camera/depth,
+near-invisible ambience, and a readable settle/proof state. Constant translate/scale through an
+entire scene is camera drift, not authored choreography.
+
+Then reach for:
 - **`framer-motion`** and **`lottie-bodymovin`** — Disney's 12 principles (anticipation, staging,
   follow-through, slow-in/out, arc, timing, exaggeration, appeal). Runtime-agnostic; apply the
   *principles* in your own Remotion `spring()`/`interpolate()` code.
@@ -231,6 +260,13 @@ The tool's `_run_atelier_checks` fails the render when:
 - **Distinctness review (replaces conformance review).** Before final render, ask: *could this be
   any other product's video? Does it reuse a look I've made before?* If yes, the art direction
   failed — return to step 1. This is the inverse of "does it match the reference."
+- **Static keyframe floor.** Every representative hero/overview proof frame must independently look
+  presentation-ready at full resolution. If a still fails, return to composition before motion polish.
+- **Surface-system coherence.** Reuse the project's own material rules across scenes (radius family,
+  edge treatment, elevation, glow, typography roles), but do not import a finished surface/component
+  from a prior hero project.
+- **Focus handoff.** Transitions must transfer attention between subjects. Do not use the same wipe,
+  glow sweep, zoom, or blur as automatic punctuation on every cut.
 - **No silent fallback to stock.** "Keep it simple" applies to *mechanics* (a 10-line spring is
   fine), never to *design* (simple ≠ reaching for `text_card`). If you catch yourself adding a
   stock `cut.type` to a hero piece, stop.

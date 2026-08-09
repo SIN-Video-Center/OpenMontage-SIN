@@ -1360,6 +1360,26 @@ class VideoCompose(BaseTool):
         if video_category and video_category != "overview-video":
             blocks.append(f"Unsupported active video_category {video_category!r}")
 
+        # --- 2a. Premium frame-first contract (hero / overview) ---
+        try:
+            from lib.premium_visual_contract import validate_premium_scene_plan
+            premium = validate_premium_scene_plan(
+                scene_plan_data if scene_plan_data else scenes,
+                quality_tier=str(quality_tier),
+                video_category=video_category,
+            )
+            if premium.get("active"):
+                blocks.extend(
+                    f"Premium visual contract violation: {issue}"
+                    for issue in premium.get("violations", [])
+                )
+                warnings.extend(
+                    f"Premium visual contract: {issue}"
+                    for issue in premium.get("warnings", [])
+                )
+        except Exception as e:
+            log.warning("Could not validate premium visual contract: %s", e)
+
         # Legacy/internal callers may still omit scene_plan, but operation='render'
         # rejects that before reaching this gate. Keep reconstruction only for direct
         # unit-level calls to this method.

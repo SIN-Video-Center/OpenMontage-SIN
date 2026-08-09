@@ -143,6 +143,45 @@
             "type": "string",
             "minLength": 1
           },
+          "keyframe_contract": {
+            "type": "object",
+            "description": "Frame-first art-direction contract. Required by premium governance for hero/overview scenes.",
+            "required": ["focal_subject", "hierarchy", "proof_frame", "still_quality_goal"],
+            "properties": {
+              "focal_subject": {"type": "string", "minLength": 1},
+              "hierarchy": {"type": "string", "minLength": 1},
+              "proof_frame": {"type": "string", "minLength": 1},
+              "still_quality_goal": {
+                "type": "string",
+                "enum": ["functional", "editorial", "premium-keyvisual"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "focus_path": {
+            "type": "object",
+            "description": "Viewer-attention choreography through the beat. Required by premium governance for hero/overview scenes.",
+            "required": ["entry", "action", "proof", "exit"],
+            "properties": {
+              "entry": {"type": "string", "minLength": 1},
+              "action": {"type": "string", "minLength": 1},
+              "proof": {"type": "string", "minLength": 1},
+              "exit": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
+          "motion_hierarchy": {
+            "type": "object",
+            "description": "Primary semantic motion, supporting motion, subordinate ambience, and readable settle state.",
+            "required": ["primary", "secondary", "ambient", "settle"],
+            "properties": {
+              "primary": {"type": "string", "minLength": 1},
+              "secondary": {"type": "string", "minLength": 1},
+              "ambient": {"type": "string", "minLength": 1},
+              "settle": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
           "entrance": {
             "type": "string"
           },
@@ -528,5 +567,37 @@
       "description": "Approved viewer-facing category copied from proposal without reinterpretation."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"quality_tier": {"const": "hero"}},
+        "required": ["quality_tier"]
+      },
+      "then": {
+        "properties": {
+          "scenes": {
+            "items": {
+              "required": ["keyframe_contract", "focus_path", "motion_hierarchy"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"video_category": {"const": "overview-video"}},
+        "required": ["video_category"]
+      },
+      "then": {
+        "properties": {
+          "scenes": {
+            "items": {
+              "required": ["keyframe_contract", "focus_path", "motion_hierarchy"]
+            }
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }

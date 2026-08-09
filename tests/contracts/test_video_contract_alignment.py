@@ -215,6 +215,19 @@ def test_hero_proposal_cannot_route_to_templated_final():
             renderer_family="bespoke",
             composition_mode="atelier",
             art_direction="Subject-specific editorial signal system",
+            taste_profile={
+                "design_read": "Premium subject-specific product film",
+                "visual_variance": 6,
+                "motion_intensity": 6,
+                "information_density": 5,
+                "focal_strategy": "One dominant evidence subject per beat",
+                "surface_system": "One coherent material, edge, elevation and glow system",
+                "motion_grammar": "Semantic primary action, supporting camera, restrained ambience, readable settle",
+                "transition_strategy": "Transfer focus through shared geometry or deliberate cuts",
+                "keyframe_quality_floor": "premium-keyvisual",
+                "restraint_rules": ["No generic dashboard showcase"],
+                "hero_moments": ["evidence handoff", "final synthesis"],
+            },
         )
     )
     assert list(validator.iter_errors(valid)) == []

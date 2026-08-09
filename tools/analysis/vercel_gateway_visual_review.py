@@ -38,12 +38,18 @@ _RETRYABLE_STATUS_CODES = {401, 402, 403, 408, 409, 429, 500, 502, 503, 504}
 _DIMENSIONS = (
     "hook_0_3_seconds",
     "editorial_hierarchy",
+    "keyframe_quality",
+    "focus_choreography",
+    "surface_coherence",
     "primary_subject_scale",
     "ui_legibility",
     "label_readability",
     "dead_space_discipline",
     "frame_and_container_discipline",
     "semantic_motion_clarity",
+    "motion_authorship",
+    "transition_quality",
+    "restraint_and_density",
     "caption_readability",
     "caption_rhythm",
     "evidence_story_alignment",
@@ -54,6 +60,8 @@ _SYSTEM_PROMPT = """You are a senior broadcast motion designer, investigative vi
 
 Review only what is visibly evidenced in the supplied rendered frames. Be severe, specific, and production-oriented. Do not praise a frame merely because it is clean, dark, modern, animated, or technically valid. Detect work that looks like a wireframe, debug overlay, UI scaffold, generic template, slideshow, or unfinished Figma composition.
 
+Some supplied images are labeled `MOTION STRIP`. Read each strip strictly **left to right** as three rendered samples from the same scene: early state → primary proof state → late/exit state. Use the visible differences inside that strip to judge focus choreography and motion authorship. A whole panel merely translating/scaling while its information state stays unchanged is weak camera-only motion. Do not invent motion that is not visible between the three samples.
+
 If the context contains an `art_direction`, `taste_profile`, or `tone_mode`, treat it as the governing design contract. Read deliberate brand marks, accent colors, typographic callouts, and real-UI screencaps as intentional creative choices to be judged against that contract — do not auto-classify them as debug artifacts, inspector highlights, or raw screen captures. Only call them problems when they violate the stated direction, look unfinished against their own palette, or harm legibility. When the context says "real-UI-led editorial product film" or similar, expect the delivered frames to show UI, and weigh how well the composition frames that UI, not whether UI exists at all.
 
 Return one JSON object only. Do not wrap it in markdown. Required shape:
@@ -63,12 +71,18 @@ Return one JSON object only. Do not wrap it in markdown. Required shape:
   "dimensions": {
     "hook_0_3_seconds": {"score": 0-5, "reason": "..."},
     "editorial_hierarchy": {"score": 0-5, "reason": "..."},
+    "keyframe_quality": {"score": 0-5, "reason": "..."},
+    "focus_choreography": {"score": 0-5, "reason": "..."},
+    "surface_coherence": {"score": 0-5, "reason": "..."},
     "primary_subject_scale": {"score": 0-5, "reason": "..."},
     "ui_legibility": {"score": 0-5, "reason": "..."},
     "label_readability": {"score": 0-5, "reason": "..."},
     "dead_space_discipline": {"score": 0-5, "reason": "..."},
     "frame_and_container_discipline": {"score": 0-5, "reason": "..."},
     "semantic_motion_clarity": {"score": 0-5, "reason": "..."},
+    "motion_authorship": {"score": 0-5, "reason": "..."},
+    "transition_quality": {"score": 0-5, "reason": "..."},
+    "restraint_and_density": {"score": 0-5, "reason": "..."},
     "caption_readability": {"score": 0-5, "reason": "..."},
     "caption_rhythm": {"score": 0-5, "reason": "..."},
     "evidence_story_alignment": {"score": 0-5, "reason": "..."},
@@ -92,9 +106,16 @@ Return one JSON object only. Do not wrap it in markdown. Required shape:
   "confidence": 0.0-1.0
 }
 
-Scoring: 5 = broadcast-ready; 4 = strong with minor polish; 3 = acceptable but visibly generic/weak; 2 = clear revision required; 1 = fundamentally poor; 0 = absent or broken. For hero/overview work, any critical finding, two or more high findings, or a score below 3 in hook, hierarchy, UI legibility, captions, or professional finish requires revision.
+Scoring: 5 = exceptional, release-ready product-film craft; 4 = strong premium work with only minor polish; 3 = acceptable but visibly generic/weak; 2 = clear revision required; 1 = fundamentally poor; 0 = absent or broken. For hero/overview work, a score of 3 is not premium. Treat keyframe quality, editorial hierarchy, focus choreography, surface coherence, motion authorship, and professional finish as 4/5-floor dimensions. Any critical finding or any high finding blocks hero/overview delivery.
 
 Specific anti-patterns to detect:
+- a frame that only looks finished because it is moving; judge whether representative frames would work as premium product key art when paused;
+- generic dashboard showcase composition: large UI window plus explanatory text with no authored focal journey or proof transformation;
+- repeated product-window silhouette/scale across scenes, especially when only the screenshot changes;
+- browser traffic lights/chrome used as automatic decoration rather than truthful device/browser context;
+- component-zoo styling: unrelated cards, pills, glows, radii, borders, and shadows competing within one film;
+- several elements moving continuously at equal energy, with no primary authored event and no readable settle state;
+- transitions that repeat the same glow/wipe/zoom or become more salient than the scene handoff;
 - nested translucent rounded rectangles, outline frames, decorative containers, and visible scaffolding without semantic purpose;
 - tiny UI islands, unreadable screenshots, labels detached from the thing they name, or labels treated as metadata;
 - excessive dead space that does not create tension or hierarchy;
@@ -105,6 +126,14 @@ Specific anti-patterns to detect:
 - an opening that delays conflict, proof, surprise, consequence, or a compelling question beyond three seconds;
 - camera motion that does not clarify meaning;
 - narration/caption wording that is generic, bureaucratic, repetitive, or emotionally flat.
+
+Dimension interpretation:
+- `keyframe_quality`: Would the strongest sampled frame from each scene stand on its own as a polished editorial/product keyvisual at full resolution? Penalize unresolved layout even when motion may hide it.
+- `focus_choreography`: Across early/primary/late samples, is there one clear subject at a time and a deliberate eye path from entry to proof to exit?
+- `surface_coherence`: Do material, radii, borders, shadow/elevation, glow, typography and UI-window treatment feel like one art-directed system rather than mixed components?
+- `motion_authorship`: From sequential samples, does the scene show an authored semantic event with support motion and a settle state, rather than continuous translate/scale, drift or unrelated simultaneous movement? State uncertainty when the samples cannot prove motion.
+- `transition_quality`: Do scene-boundary samples hand focus into the next beat, or merely apply a repeated effect?
+- `restraint_and_density`: Is visual energy intentionally budgeted, with negative space and calm evidence holds, rather than every layer competing at once?
 """
 
 
@@ -150,11 +179,12 @@ def _normalise_review(raw: dict[str, Any], *, model: str) -> dict[str, Any]:
     critical = sum(f["severity"] == "critical" for f in findings)
     high = sum(f["severity"] == "high" for f in findings)
     blocking_names = {
-        "hook_0_3_seconds", "editorial_hierarchy", "ui_legibility",
-        "caption_readability", "professional_finish",
+        "hook_0_3_seconds", "editorial_hierarchy", "keyframe_quality",
+        "focus_choreography", "surface_coherence", "ui_legibility",
+        "caption_readability", "motion_authorship", "professional_finish",
     }
     blocking_low = any(normalised_dimensions[name]["score"] < 3 for name in blocking_names)
-    if status == "pass" and (critical or high >= 2 or blocking_low):
+    if status == "pass" and (critical or high >= 1 or blocking_low):
         status = "revise"
 
     comparison = raw.get("comparison") if isinstance(raw.get("comparison"), dict) else None
@@ -182,7 +212,7 @@ def _normalise_review(raw: dict[str, Any], *, model: str) -> dict[str, Any]:
 
 class VercelGatewayVisualReview(BaseTool):
     name = "vercel_gateway_visual_review"
-    version = "1.0.0"
+    version = "1.1.0"
     tier = ToolTier.ANALYZE
     capability = "visual_review"
     provider = "vercel-ai-gateway"
@@ -205,13 +235,17 @@ class VercelGatewayVisualReview(BaseTool):
     supports = {
         "multiple_images": True,
         "pairwise_comparison": True,
+        "premium_keyframe_review": True,
+        "focus_choreography_review": True,
+        "surface_coherence_review": True,
+        "motion_authorship_review": True,
         "structured_findings": True,
         "human_replacement": False,
         "key_pool_rotation": True,
     }
     best_for = [
         "post-render hero and overview-video design criticism",
-        "finding unreadable UI, decorative framing, weak hierarchy, and caption problems",
+        "finding weak keyframes, unreadable UI, decorative framing, weak hierarchy, incoherent surfaces, unauthored motion, repeated transitions, and caption problems",
         "A/B comparison of successive render candidates",
     ]
     not_good_for = [
@@ -336,6 +370,7 @@ class VercelGatewayVisualReview(BaseTool):
                 "label": str(item.get("label") or path.name),
                 "timestampSeconds": _safe_float(item.get("timestamp_seconds"), 0.0),
                 "sceneId": str(item.get("scene_id") or "unknown"),
+                "sampleCount": max(1, min(3, int(_safe_float(item.get("sample_count"), 1)))),
             })
 
         model = str(inputs.get("model") or "zai/glm-4.5v")
@@ -377,6 +412,23 @@ class VercelGatewayVisualReview(BaseTool):
             )
 
         review = _normalise_review(runtime_result.get("review") or {}, model=model)
+        context = inputs.get("context") if isinstance(inputs.get("context"), dict) else {}
+        reviewed_scene_ids = sorted({
+            str(frame["sceneId"])
+            for frame in frames
+            if str(frame.get("sceneId") or "") not in {"", "hook", "unknown"}
+        })
+        scene_windows = context.get("scene_windows") if isinstance(context.get("scene_windows"), list) else []
+        expected_scene_ids = [
+            str(window.get("id"))
+            for window in scene_windows
+            if isinstance(window, dict) and str(window.get("id") or "")
+        ]
+        if not expected_scene_ids:
+            expected_scene_ids = list(reviewed_scene_ids)
+        expected_scene_ids = list(dict.fromkeys(expected_scene_ids))
+        scene_coverage_complete = set(expected_scene_ids).issubset(set(reviewed_scene_ids))
+
         artifact = {
             "version": "1.0",
             "video_path": str(inputs.get("video_path") or ""),
@@ -392,7 +444,11 @@ class VercelGatewayVisualReview(BaseTool):
                 "frame_paths": [str(path) for path in paths],
                 "frame_metadata": frames,
                 "frame_count": len(paths),
+                "sampled_frame_count": sum(int(frame.get("sampleCount") or 1) for frame in frames),
                 "hook_window_reviewed": any(0 <= frame["timestampSeconds"] <= 3.0 for frame in frames),
+                "expected_scene_ids": expected_scene_ids,
+                "reviewed_scene_ids": reviewed_scene_ids,
+                "scene_coverage_complete": scene_coverage_complete,
             },
             **review,
             "human_approval": {"required": True, "status": "pending"},

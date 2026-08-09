@@ -30,7 +30,7 @@ semantic motion merely because it is rendered in Remotion.
 
 ### Atelier
 
-Use a project-local hand-authored composition for bespoke/hero work. Required:
+Use a project-local hand-authored composition for bespoke/hero work. For product/brand/launch hero work and every Overview Video, first read `skills/meta/product-film-art-direction.md` and `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`. Required:
 
 - `quality_tier="hero"` or another approved bespoke brief;
 - `delivery_kind="bespoke"`;
@@ -38,7 +38,9 @@ Use a project-local hand-authored composition for bespoke/hero work. Required:
 - project-specific `art_direction`;
 - complete `scene_inventory` with a unique primary subject per scene;
 - the signature device used in at most two scenes;
-- no import from stock creative components or a previous project's look.
+- no import from stock creative components or a previous project's look;
+- `keyframe_contract`, `focus_path`, and `motion_hierarchy` for every hero/overview scene;
+- a representative static keyframe board approved before full motion polish.
 
 Reuse engine knowledge only. The ordinary `Explainer` may make an animatic, never
 the hero final.
@@ -104,6 +106,23 @@ Current local-duration consumers include:
 
 New scene components must follow the same pattern.
 
+## Premium frame-first contract
+
+For `quality_tier="hero"` or `video_category="overview-video"`, do not start by animating a generic full scene. First resolve the representative proof frame.
+
+Every scene carries:
+
+- `keyframe_contract.focal_subject`
+- `keyframe_contract.hierarchy`
+- `keyframe_contract.proof_frame`
+- `keyframe_contract.still_quality_goal="premium-keyvisual"`
+- `focus_path.{entry,action,proof,exit}`
+- `motion_hierarchy.{primary,secondary,ambient,settle}`
+
+Render the keyframe board before completing animation. A paused frame that looks like a generic dashboard showcase, component demo, wireframe, or unresolved card stack is a blocking design failure even if the motion is technically sophisticated.
+
+Treat UI windows as staging surfaces, not automatic premium styling. Generic browser chrome, traffic lights, nested rounded rectangles, glow shells and repeated panel silhouettes are not defaults. Use them only when they serve truthful product/device context or a specific art-direction purpose.
+
 ## Visual beat and motion contract
 
 Every narrated scene/cut carries:
@@ -136,6 +155,8 @@ static_hold
 A semantic class without concrete before/action/after states is treated as weak
 motion. Charts count as semantic only when their data or relationships progressively
 build with the spoken beat.
+
+For premium motion, semantic classification is necessary but not sufficient. The scene must also have a clear authored motion hierarchy: one primary semantic event, subordinate camera/depth/reveal motion, low-priority ambience, and a readable settle state. Constant translate/scale across the whole scene remains `camera_only` unless a separate state change carries the meaning.
 
 For presentable/hero work:
 
@@ -170,6 +191,8 @@ All props live at the top level of the cut object. Do not invent `props` or
 frames. The shared Explainer executes fade, slide, zoom, and wipe through a
 scene-local transition wrapper. A new transition family needs implementation plus a
 frame-based contract test; adding a string to JSON alone is insufficient.
+
+For hero/overview Atelier work, transition quality is judged separately from mere rendered change. A transition must hand the viewer's focus between subjects through shared geometry, continuing motion, object carry, luminance/focus transfer, diagram completion, or a deliberate hard cut. Replaying the same wipe/glow/zoom as automatic punctuation is a premium-quality failure.
 
 ## Source media
 
@@ -224,6 +247,7 @@ pre-compose validation, or final review.
 Before render, `video_compose` verifies:
 
 - approved runtime and composition mode;
+- hero/overview premium scene-plan contract (`keyframe_contract`, `focus_path`, `motion_hierarchy`);
 - hero/bespoke routing;
 - full scene plan rather than reconstructed cut metadata;
 - delivery-promise and duration-weighted semantic-motion coverage;
@@ -239,7 +263,7 @@ Every final render is measured from the actual output:
 
 1. ffprobe container, streams, duration, resolution, codec.
 2. Representative and scene-boundary frames.
-3. Timestamped contact sheet.
+3. Timestamped contact sheet plus hero/overview semantic critic coverage across every scene.
 4. 2-FPS low-resolution frame-difference motion analysis.
 5. Motion-coverage ratio against the approved quality floor.
 6. Freeze/non-semantic holds with exact timecodes.
@@ -250,6 +274,7 @@ Every final render is measured from the actual output:
 10. Loudness, true peak, clipping, expected ducking.
 11. Subtitle/caption presence and timing.
 12. Runtime and delivery-promise preservation.
+13. Premium rendered dimensions for hero/overview: static keyframe quality, focus choreography, surface coherence, motion authorship, transition quality, restraint/density, and professional finish.
 
 `final_review.status == "pass"` is the only deliverable state. `revise` and `fail`
 both return an unsuccessful tool result and require correction/re-rendering.
@@ -271,6 +296,8 @@ both return an unsuccessful tool result and require correction/re-rendering.
 - [ ] Proposal quality/runtime/composition mode preserved.
 - [ ] Absolute timeline and `source_in_seconds` validated.
 - [ ] Complete semantic visual beat per narrated claim.
+- [ ] Hero/overview scenes declare keyframe, focus, and motion-hierarchy contracts.
+- [ ] Static proof-frame board passes before full motion polish.
 - [ ] Scene-local durations passed to all time-dependent components.
 - [ ] Transitions visibly change rendered frames.
 - [ ] Narration, music ducking, SFX, and captions configured.

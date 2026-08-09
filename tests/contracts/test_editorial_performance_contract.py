@@ -12,12 +12,21 @@ def _proposal():
     from tests.contracts.test_phase0_contracts import sample_artifact
     value = sample_artifact('proposal_packet')
     value['production_plan']['video_category'] = 'overview-video'
+    value['production_plan']['taste_profile'].update({
+        'focal_strategy': 'One dominant evidence subject per beat.',
+        'surface_system': 'One coherent radius, edge, elevation and glow system.',
+        'motion_grammar': 'Semantic primary action, supporting camera, restrained ambience, readable settle.',
+        'transition_strategy': 'Focus handoff through shared geometry or deliberate cuts.',
+        'keyframe_quality_floor': 'premium-keyvisual',
+        'restraint_rules': ['No generic dashboard showcase'],
+        'hero_moments': ['evidence handoff', 'final synthesis'],
+    })
     value['production_plan']['semantic_visual_review'] = {
         'required': True,
         'models': ['zai/glm-4.5v'],
         'max_iterations': 3,
         'hook_window_seconds': 3,
-        'minimum_frames': 8,
+        'minimum_frames': 12,
         'human_approval_required': True,
     }
     return value
@@ -52,7 +61,7 @@ def test_overview_edit_requires_semantic_review_contract():
         },
         'semantic_visual_review': {
             'required': True, 'models':['zai/glm-4.5v'], 'max_iterations':3,
-            'hook_window_seconds':3, 'minimum_frames':8,
+            'hook_window_seconds':3, 'minimum_frames':12,
             'human_approval_required':True,
         },
     }

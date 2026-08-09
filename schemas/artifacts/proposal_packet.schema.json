@@ -686,6 +686,20 @@
             "properties": {
               "delivery_kind": {
                 "const": "bespoke"
+              },
+              "taste_profile": {
+                "required": [
+                  "focal_strategy",
+                  "surface_system",
+                  "motion_grammar",
+                  "transition_strategy",
+                  "keyframe_quality_floor",
+                  "restraint_rules",
+                  "hero_moments"
+                ],
+                "properties": {
+                  "keyframe_quality_floor": {"const": "premium-keyvisual"}
+                }
               }
             },
             "anyOf": [
@@ -774,6 +788,20 @@
               "semantic_visual_review"
             ],
             "properties": {
+              "taste_profile": {
+                "required": [
+                  "focal_strategy",
+                  "surface_system",
+                  "motion_grammar",
+                  "transition_strategy",
+                  "keyframe_quality_floor",
+                  "restraint_rules",
+                  "hero_moments"
+                ],
+                "properties": {
+                  "keyframe_quality_floor": {"const": "premium-keyvisual"}
+                }
+              },
               "semantic_visual_review": {
                 "properties": {
                   "required": {
@@ -786,7 +814,7 @@
                     "maximum": 3
                   },
                   "minimum_frames": {
-                    "minimum": 8
+                    "minimum": 12
                   },
                   "human_approval_required": {
                     "const": true
@@ -940,6 +968,35 @@
         },
         "reference_strategy": {
           "type": "string"
+        },
+        "focal_strategy": {
+          "type": "string",
+          "description": "Hero/product contract for how attention enters, transfers, and lands on proof. Required by reviewer for hero/overview work."
+        },
+        "surface_system": {
+          "type": "string",
+          "description": "Coherent material language: surface, radius, edge, elevation, glow, typography, depth and product-window rules."
+        },
+        "motion_grammar": {
+          "type": "string",
+          "description": "Primary/secondary/ambient motion hierarchy and timing character for the piece."
+        },
+        "transition_strategy": {
+          "type": "string",
+          "description": "How viewer attention is handed between scenes; effects are subordinate to focus continuity."
+        },
+        "keyframe_quality_floor": {
+          "type": "string",
+          "enum": ["functional", "editorial", "premium-keyvisual"],
+          "description": "Static representative-frame quality floor. Hero/overview requires premium-keyvisual."
+        },
+        "restraint_rules": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "hero_moments": {
+          "type": "array",
+          "items": {"type": "string"}
         },
         "anti_patterns": {
           "type": "array",

@@ -24,7 +24,7 @@
     "evidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["frame_paths", "frame_metadata", "frame_count", "hook_window_reviewed"],
+      "required": ["frame_paths", "frame_metadata", "frame_count", "sampled_frame_count", "hook_window_reviewed", "expected_scene_ids", "reviewed_scene_ids", "scene_coverage_complete"],
       "properties": {
         "frame_paths": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string"}},
         "frame_metadata": {
@@ -32,18 +32,23 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["index", "path", "label", "timestampSeconds", "sceneId"],
+            "required": ["index", "path", "label", "timestampSeconds", "sceneId", "sampleCount"],
             "properties": {
               "index": {"type": "integer", "minimum": 0},
               "path": {"type": "string"},
               "label": {"type": "string"},
               "timestampSeconds": {"type": "number", "minimum": 0},
-              "sceneId": {"type": "string"}
+              "sceneId": {"type": "string"},
+              "sampleCount": {"type": "integer", "minimum": 1, "maximum": 3}
             }
           }
         },
         "frame_count": {"type": "integer", "minimum": 1, "maximum": 16},
-        "hook_window_reviewed": {"type": "boolean"}
+        "sampled_frame_count": {"type": "integer", "minimum": 1, "maximum": 48},
+        "hook_window_reviewed": {"type": "boolean"},
+        "expected_scene_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "reviewed_scene_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "scene_coverage_complete": {"type": "boolean"}
       }
     },
     "status": {"type": "string", "enum": ["pass", "revise", "fail"]},
@@ -51,16 +56,22 @@
     "dimensions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hook_0_3_seconds", "editorial_hierarchy", "primary_subject_scale", "ui_legibility", "label_readability", "dead_space_discipline", "frame_and_container_discipline", "semantic_motion_clarity", "caption_readability", "caption_rhythm", "evidence_story_alignment", "professional_finish"],
+      "required": ["hook_0_3_seconds", "editorial_hierarchy", "keyframe_quality", "focus_choreography", "surface_coherence", "primary_subject_scale", "ui_legibility", "label_readability", "dead_space_discipline", "frame_and_container_discipline", "semantic_motion_clarity", "motion_authorship", "transition_quality", "restraint_and_density", "caption_readability", "caption_rhythm", "evidence_story_alignment", "professional_finish"],
       "properties": {
         "hook_0_3_seconds": {"$ref": "#/$defs/score"},
         "editorial_hierarchy": {"$ref": "#/$defs/score"},
+        "keyframe_quality": {"$ref": "#/$defs/score"},
+        "focus_choreography": {"$ref": "#/$defs/score"},
+        "surface_coherence": {"$ref": "#/$defs/score"},
         "primary_subject_scale": {"$ref": "#/$defs/score"},
         "ui_legibility": {"$ref": "#/$defs/score"},
         "label_readability": {"$ref": "#/$defs/score"},
         "dead_space_discipline": {"$ref": "#/$defs/score"},
         "frame_and_container_discipline": {"$ref": "#/$defs/score"},
         "semantic_motion_clarity": {"$ref": "#/$defs/score"},
+        "motion_authorship": {"$ref": "#/$defs/score"},
+        "transition_quality": {"$ref": "#/$defs/score"},
+        "restraint_and_density": {"$ref": "#/$defs/score"},
         "caption_readability": {"$ref": "#/$defs/score"},
         "caption_rhythm": {"$ref": "#/$defs/score"},
         "evidence_story_alignment": {"$ref": "#/$defs/score"},

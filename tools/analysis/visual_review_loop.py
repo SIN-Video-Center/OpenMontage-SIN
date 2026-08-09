@@ -53,34 +53,62 @@ def _scene_windows(edit_decisions: dict[str, Any] | None, duration: float) -> li
 
 
 def _sample_plan(duration: float, windows: list[dict[str, Any]], max_frames: int = 16) -> list[dict[str, Any]]:
-    samples: list[dict[str, Any]] = [
+    """Build a critic plan that preserves hook evidence and scene coverage.
+
+    Hero review needs sequence evidence, but the multimodal critic has a bounded
+    image budget. Reserve three hook frames, then guarantee one primary proof
+    frame per scene before spending remaining slots on early/late states. This
+    avoids the old failure mode where down-sampling could silently omit a scene.
+    """
+    hook: list[dict[str, Any]] = [
         {"timestamp_seconds": min(0.25, max(0.0, duration - 0.02)), "scene_id": "hook", "label": "hook opening"},
         {"timestamp_seconds": min(1.5, max(0.0, duration - 0.02)), "scene_id": "hook", "label": "hook development"},
         {"timestamp_seconds": min(2.8, max(0.0, duration - 0.02)), "scene_id": "hook", "label": "hook payoff"},
     ]
+    primary: list[dict[str, Any]] = []
+    extras: list[dict[str, Any]] = []
     for window in windows:
         span = max(0.01, window["end"] - window["start"])
-        for fraction, label in ((0.22, "scene early"), (0.62, "scene primary state")):
-            samples.append({
+        primary.append({
+            "timestamp_seconds": min(duration - 0.02, window["start"] + span * 0.58),
+            "scene_id": window["id"],
+            "label": "scene primary proof state",
+        })
+        for fraction, label in ((0.20, "scene early state"), (0.84, "scene late/exit state")):
+            extras.append({
                 "timestamp_seconds": min(duration - 0.02, window["start"] + span * fraction),
                 "scene_id": window["id"],
                 "label": label,
             })
-    unique: list[dict[str, Any]] = []
-    seen: set[tuple[int, str]] = set()
-    for sample in samples:
-        key = (round(float(sample["timestamp_seconds"]) * 10), str(sample["scene_id"]))
-        if key not in seen and sample["timestamp_seconds"] >= 0:
-            seen.add(key)
-            unique.append(sample)
-    if len(unique) <= max_frames:
-        return unique
-    # Preserve all three hook samples, then distribute remaining slots across scenes.
-    hook = unique[:3]
-    rest = unique[3:]
-    slots = max_frames - len(hook)
-    chosen = [rest[round(i * (len(rest) - 1) / max(1, slots - 1))] for i in range(slots)]
-    return hook + chosen
+
+    def unique(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen: set[tuple[int, str]] = set()
+        for sample in samples:
+            key = (round(float(sample["timestamp_seconds"]) * 10), str(sample["scene_id"]))
+            if key not in seen and sample["timestamp_seconds"] >= 0:
+                seen.add(key)
+                result.append(sample)
+        return result
+
+    hook = unique(hook)
+    primary = unique(primary)
+    base = unique(hook + primary)
+    if len(base) >= max_frames:
+        slots = max(0, max_frames - len(hook))
+        if slots <= 0:
+            return hook[:max_frames]
+        if len(primary) <= slots:
+            return unique(hook + primary)[:max_frames]
+        chosen = [primary[round(i * (len(primary) - 1) / max(1, slots - 1))] for i in range(slots)]
+        return unique(hook + chosen)[:max_frames]
+
+    slots = max_frames - len(base)
+    extras = unique(extras)
+    if len(extras) <= slots:
+        return unique(base + extras)
+    chosen_extras = [extras[round(i * (len(extras) - 1) / max(1, slots - 1))] for i in range(slots)]
+    return unique(base + chosen_extras)
 
 
 def _extract_frames(video_path: Path, plan: list[dict[str, Any]], frame_dir: Path) -> list[Path]:
@@ -96,6 +124,88 @@ def _extract_frames(video_path: Path, plan: list[dict[str, Any]], frame_dir: Pat
             raise RuntimeError(f"Could not extract visual-review frame at {sample['timestamp_seconds']:.3f}s")
         frames.append(output)
     return frames
+
+
+def _strip_samples(start: float, end: float, *, scene_id: str, hook: bool = False) -> list[dict[str, Any]]:
+    if hook:
+        times = (0.25, 1.5, 2.8)
+        labels = ("hook opening", "hook development", "hook payoff")
+    else:
+        span = max(0.01, end - start)
+        times = (start + span * 0.20, start + span * 0.58, start + span * 0.84)
+        labels = ("scene early state", "scene primary proof state", "scene late/exit state")
+    return [
+        {"timestamp_seconds": min(end - 0.01, max(start, value)), "scene_id": scene_id, "label": label}
+        for value, label in zip(times, labels)
+    ]
+
+
+def _make_motion_strip(parts: list[Path], output: Path) -> Path:
+    if len(parts) != 3:
+        raise ValueError("Motion strip requires exactly three source frames")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", str(parts[0]), "-i", str(parts[1]), "-i", str(parts[2]),
+            "-filter_complex",
+            "[0:v]scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black[a];"
+            "[1:v]scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black[b];"
+            "[2:v]scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:black[c];"
+            "[a][b][c]hstack=inputs=3[out]",
+            "-map", "[out]", "-frames:v", "1", "-q:v", "2", str(output),
+        ],
+        capture_output=True, timeout=60, check=False,
+    )
+    if proc.returncode != 0 or not output.is_file():
+        raise RuntimeError(f"Could not build motion strip: {output.name}")
+    return output
+
+
+def _extract_motion_strips(
+    video_path: Path,
+    duration: float,
+    windows: list[dict[str, Any]],
+    strip_dir: Path,
+) -> tuple[list[Path], list[dict[str, Any]]]:
+    """Return one 3-sample strip for the hook and one for every scene.
+
+    Each strip is read left-to-right as early -> proof -> late. This gives the
+    critic temporal evidence while staying inside its 16-image request budget.
+    """
+    if len(windows) > 15:
+        raise RuntimeError(
+            f"Visual review has {len(windows)} scenes; motion-strip review supports at most 15 scenes per pass"
+        )
+    strip_dir.mkdir(parents=True, exist_ok=True)
+    strips: list[Path] = []
+    metadata: list[dict[str, Any]] = []
+
+    hook_end = min(3.0, duration)
+    hook_plan = _strip_samples(0.0, max(0.03, hook_end), scene_id="hook", hook=True)
+    hook_parts = _extract_frames(video_path, hook_plan, strip_dir / "hook_parts")
+    strips.append(_make_motion_strip(hook_parts, strip_dir / "motion_strip_00_hook.jpg"))
+    metadata.append({
+        "timestamp_seconds": min(1.5, max(0.0, duration - 0.02)),
+        "scene_id": "hook",
+        "label": "MOTION STRIP left-to-right: hook opening -> development -> payoff",
+        "sample_count": 3,
+    })
+
+    for index, window in enumerate(windows, start=1):
+        start = max(0.0, float(window["start"]))
+        end = min(duration, float(window["end"]))
+        plan = _strip_samples(start, end, scene_id=str(window["id"]))
+        parts = _extract_frames(video_path, plan, strip_dir / f"scene_{index:02d}_parts")
+        strips.append(_make_motion_strip(parts, strip_dir / f"motion_strip_{index:02d}.jpg"))
+        metadata.append({
+            "timestamp_seconds": plan[1]["timestamp_seconds"],
+            "scene_id": str(window["id"]),
+            "label": "MOTION STRIP left-to-right: early state -> primary proof state -> late/exit state",
+            "sample_count": 3,
+        })
+
+    return strips, metadata
 
 
 def _revision_brief(review: dict[str, Any], gate: dict[str, Any]) -> str:
@@ -138,7 +248,7 @@ def _revision_brief(review: dict[str, Any], gate: dict[str, Any]) -> str:
 
 class VisualReviewLoop(BaseTool):
     name = "visual_review_loop"
-    version = "1.0.0"
+    version = "1.1.0"
     tier = ToolTier.ANALYZE
     capability = "visual_review"
     provider = "openmontage"
@@ -146,8 +256,8 @@ class VisualReviewLoop(BaseTool):
     execution_mode = ExecutionMode.SYNC
     determinism = Determinism.STOCHASTIC
     runtime = ToolRuntime.HYBRID
-    capabilities = ["frame_sampling", "hook_sampling", "semantic_visual_review", "revision_brief", "three_iteration_ceiling"]
-    supports = {"automatic_frame_inspection": True, "max_iterations": 3, "human_final_lock": True}
+    capabilities = ["frame_sampling", "motion_strip_sampling", "hook_sampling", "semantic_visual_review", "revision_brief", "three_iteration_ceiling"]
+    supports = {"automatic_frame_inspection": True, "motion_strips": True, "max_iterations": 3, "human_final_lock": True}
     best_for = ["iterative post-render review of hero and overview videos"]
     input_schema = {
         "type": "object",
@@ -186,10 +296,16 @@ class VisualReviewLoop(BaseTool):
             edit_decisions = json.loads(Path(inputs["edit_decisions_path"]).expanduser().read_text(encoding="utf-8"))
         duration = _probe_duration(video_path)
         windows = _scene_windows(edit_decisions, duration)
-        plan = _sample_plan(duration, windows)
         output_dir = Path(inputs.get("output_dir") or video_path.parent / "visual_review").expanduser().resolve()
         iteration_dir = output_dir / f"iteration_{iteration:02d}"
-        frames = _extract_frames(video_path, plan, iteration_dir / "frames")
+        try:
+            frames, plan = _extract_motion_strips(video_path, duration, windows, iteration_dir / "motion_strips")
+        except Exception as exc:
+            return ToolResult(
+                success=False,
+                error=f"Could not build temporal motion-strip evidence: {exc}",
+                duration_seconds=round(time.time() - started, 2),
+            )
 
         review_path = iteration_dir / "visual_review.json"
         incoming_context = dict(inputs.get("context") or {})

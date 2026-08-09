@@ -64,6 +64,22 @@ def test_overview_video_requires_integrated_caption_field_without_full_width_bar
             "primary_subject": "Evidence flow", "visual_state_before": "Raw source",
             "visual_action": "Source becomes a traceable claim", "visual_state_after": "Verified claim",
             "motion_class": "procedural_semantic_motion", "semantic_purpose": "Show provenance",
+            "keyframe_contract": {
+                "focal_subject": "Verified source passage",
+                "hierarchy": "Source passage first, claim second, chrome recessed",
+                "proof_frame": "Claim is visibly connected to the original passage",
+                "still_quality_goal": "premium-keyvisual",
+            },
+            "focus_path": {
+                "entry": "Enter on the claim", "action": "Follow the source link",
+                "proof": "Land on the original passage", "exit": "Carry focus into the next evidence beat",
+            },
+            "motion_hierarchy": {
+                "primary": "Source link connects claim to original passage",
+                "secondary": "Camera reframes toward the passage",
+                "ambient": "Background light remains subordinate",
+                "settle": "Passage holds readable after the link resolves",
+            },
             "protected_regions": [{"id": "main", "x": 0.05, "y": 0.05, "width": 0.9, "height": 0.72}],
             "caption_layout": {"preferred_zone": "bottom"},
         }],

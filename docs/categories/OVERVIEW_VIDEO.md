@@ -52,6 +52,8 @@ German example:
 
 ## Visual language
 
+This category also inherits the binding frame-first rules in `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`. For hero/overview work, motion quality begins with the paused proof frame: if a representative still does not look like a resolved premium keyvisual, the scene must be recomposed before motion polish.
+
 Overview-Video design should be restrained product editorial:
 
 - one coherent surface system;
@@ -60,7 +62,11 @@ Overview-Video design should be restrained product editorial:
 - calm depth, soft light and controlled contrast;
 - motion that follows information, not decorative loops;
 - actual product UI, source material or system evidence wherever available;
-- abstract diagrams only when they clarify flow, provenance, transformation or control.
+- abstract diagrams only when they clarify flow, provenance, transformation or control;
+- one dominant focal subject per beat, with supporting layers visibly recessed;
+- one coherent surface/material system across the film even when layouts vary;
+- motion hierarchy with a semantic primary action, subordinate secondary movement and low-priority ambience;
+- transitions that hand attention into the next subject rather than replaying the same effect.
 
 A reference may inspire qualities, not identity theft. Do not copy OpenAI/ChatGPT logos, proprietary component shapes or a recognizable screen wholesale. It is acceptable to pursue the underlying qualities: clarity, whitespace, subtle depth, disciplined typography and quiet motion.
 
@@ -72,6 +78,22 @@ A reference may inspire qualities, not identity theft. Do not copy OpenAI/ChatGP
 - Small labels may support hierarchy; they may not carry the primary claim.
 - Exact product and legal text must be rendered by the runtime, never baked into generated imagery.
 
+### Static keyframe and focus gates
+
+Every scene must declare:
+
+- `keyframe_contract` — focal subject, hierarchy, proof frame and `still_quality_goal="premium-keyvisual"`;
+- `focus_path` — entry, action, proof and exit of viewer attention;
+- `motion_hierarchy` — primary, secondary, ambient and settle behavior.
+
+Before full motion is finalized, render a keyframe board with at least one representative proof frame per scene and a second frame where the focal hierarchy changes materially. Send back any frame that:
+
+- looks like an unresolved dashboard showcase, component demo, wireframe or debug surface;
+- relies on generic browser chrome, decorative containers or glow to feel finished;
+- has two equal-weight subjects without an explicit comparison purpose;
+- repeats the same UI-window silhouette/scale across neighboring scenes;
+- cannot communicate the scene's proof state when motion is paused.
+
 ### Semantic motion gates
 
 - At least 80% of spoken time must have meaningful visual change.
@@ -80,17 +102,23 @@ A reference may inspire qualities, not identity theft. Do not copy OpenAI/ChatGP
 - Camera drift, glow sweeps and particles do not count as semantic motion.
 - No unexplained static hold may exceed 2.5 seconds.
 - The same card grid or composition may not be recycled across consecutive scenes.
+- A constant translate/scale over a scene is `camera_only` unless a separate semantic state change occurs.
+- Several unrelated elements may not move continuously at equal visual energy; one authored primary action must dominate.
+- Every primary action must land in a readable settle/proof state before the scene hands focus away.
 
 ## UI evidence choreography
 
-When product UI exists, do not merely place a screenshot in a frame. Direct the viewer's attention through it:
+When product UI exists, do not merely place a screenshot in a frame. Direct the viewer's attention through it. A generic browser/device wrapper is not automatically premium; use visible chrome only when the browser/device context is truthful and semantically useful:
 
 - crop to the feature being discussed;
 - reveal only the relevant region;
 - animate cursor, selection, source link or state transition when truthful;
 - connect UI elements to an explanatory diagram when the relationship is not obvious;
 - preserve UI proportions and text legibility;
-- never fabricate a capability the product does not show.
+- never fabricate a capability the product does not show;
+- reduce or remove headline dominance once the UI evidence becomes the proof;
+- use crop, focus, luminance, blur, masking and depth before adding another outline or frame;
+- hold the final proof state long enough to inspect at delivery resolution.
 
 ## Caption field — geometry without a bar
 
@@ -148,7 +176,9 @@ A scene that visually demonstrates a different claim from the one currently spok
 - Declare protected regions including complete motion paths.
 - Keep meaningful content above the caption reading field.
 - Plan actual UI choreography and visual proof states.
+- Declare `keyframe_contract`, `focus_path`, and `motion_hierarchy` for every scene.
 - Validate headline wrapping at representative frames.
+- Render and review the static keyframe board before finishing full animation.
 
 ### Edit
 
@@ -174,6 +204,8 @@ The final is blocked unless all are true:
 - German Unicode and orthography pass;
 - actual UI is legible and visually relevant;
 - semantic motion and scene variety pass;
+- every scene's premium keyframe/focus/motion contract is present and honored;
+- rendered keyframes pass hierarchy, surface coherence, focus choreography and professional-finish review;
 - no black frames, freezes, missing assets, clipping or wrong audio;
 - contact sheet and rendered-audio transcript were inspected.
 
@@ -194,7 +226,8 @@ persuasion.
 - Decorative nested frames, rounded outline stacks, chapter counters, and visual
   scaffolding are blocking defects.
 - Hero/Overview compose must run `visual_review_loop` on 0–3 second hook frames and
-  at least two representative frames per scene.
+  representative early/primary/late evidence across all scenes within the critic frame budget.
+- The critic must inspect at least 12 rendered frames for hero/overview candidates and must cover every scene at least once.
 - Store `visual_review.json` and `revision_brief.md`; revise and rerender when the gate
   reports `revise`.
 - Maximum automatic iterations: three. Final delivery still requires human viewing and

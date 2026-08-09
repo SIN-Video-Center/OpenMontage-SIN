@@ -70,6 +70,34 @@ If `proposal_packet.production_plan.taste_profile` or the active playbook's `tas
 
 At proposal stage, a missing `taste_profile` is a **suggestion** for preset/low-stakes work and a **critical** finding for atelier, product/brand, launch, hero, or custom-playbook work. At scene_plan/edit/compose, treat dial violations as **suggestion** unless they break the approved delivery promise.
 
+For hero/product/brand/launch work and every `overview-video`, also verify the premium fields from `skills/meta/product-film-art-direction.md`: `focal_strategy`, `surface_system`, `motion_grammar`, `transition_strategy`, `keyframe_quality_floor="premium-keyvisual"`, `restraint_rules`, and `hero_moments`. Missing any of these is **CRITICAL** because the scene stage would otherwise invent the art direction after proposal lock.
+
+### Step 4c: Premium Product Film Review
+
+Run for `quality_tier="hero"` and every `video_category="overview-video"`. Binding reference: `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`.
+
+At scene_plan:
+
+- Every scene must include `keyframe_contract.{focal_subject,hierarchy,proof_frame,still_quality_goal}` with `still_quality_goal="premium-keyvisual"`. Missing/incomplete ⇒ **CRITICAL**.
+- Every scene must include `focus_path.{entry,action,proof,exit}`. Missing/incomplete ⇒ **CRITICAL**.
+- Every scene must include `motion_hierarchy.{primary,secondary,ambient,settle}`. Missing/incomplete ⇒ **CRITICAL**.
+- `motion_hierarchy.primary` must describe an information/attention-changing action, not `camera move`, `subtle motion`, `glow`, `parallax`, or another ambient-only action. Vague/ambient primary ⇒ **CRITICAL**.
+- One focal subject must dominate each beat. Two equal-weight subjects without an explicit comparison role ⇒ **CRITICAL**.
+- The planned proof state must remain understandable when motion is paused. If not ⇒ **CRITICAL**.
+
+At assets/authoring checkpoint:
+
+- A representative keyframe board must exist before full motion polish. At least one proof frame per scene; use a second frame when hierarchy changes materially.
+- Review the board for repeated silhouette, repeated UI-window scale, repeated split layout, generic dashboard/showcase framing, decorative browser chrome, nested frames, and component-zoo styling.
+- Any proof frame that looks unresolved when paused ⇒ **CRITICAL**. Motion is not an accepted corrective action; recompose the still first.
+
+At compose/final review:
+
+- The rendered semantic critic must include `keyframe_quality`, `focus_choreography`, `surface_coherence`, `motion_authorship`, `transition_quality`, and `restraint_and_density` in addition to the existing dimensions.
+- Hero premium dimensions must meet the governed 4/5 floor. A single high-severity rendered finding blocks hero/overview delivery.
+- Check that primary motion lands in a readable settle/proof state and that transitions hand focus rather than advertise a repeated effect.
+- Explicitly ask: *Would the strongest representative frames be acceptable as product key art if paused?* No ⇒ **CRITICAL**.
+
 ### Step 5: Evaluate Success Criteria
 
 For each `success_criteria` item from the manifest:
@@ -135,7 +163,7 @@ Structure your review as:
 | proposal | Delivery promise clarity, renderer family AND render runtime selection, music/voice plan, decision log started |
 | idea | Hook uniqueness, research depth, angle diversity |
 | script | Timing accuracy, narrative arc, enhancement cue density |
-| scene_plan | Full coverage, visual variety, asset feasibility, slideshow risk score |
+| scene_plan | Full coverage, visual variety, asset feasibility, slideshow risk score, premium keyframe/focus/motion contract for hero/overview |
 | assets | File existence, style consistency, budget adherence |
 | edit | Timeline coverage, audio sync, subtitle presence, delivery promise compliance |
 | compose | Playability, duration accuracy, audio quality, pre-compose validation pass |
@@ -306,13 +334,15 @@ Run at **compose** and **publish** stages. Ensures the agent reviewed the actual
    - `pass` → OK, proceed
    - `revise` → The pipeline MUST NOT present, publish, or return success. Re-render and re-review. Continuing is **CRITICAL**.
    - `fail` → The pipeline MUST NOT proceed. Continuing is **CRITICAL**.
-3. **Check completeness**: All 5 required checks must have data:
+3. **Check completeness**: All required deterministic and semantic checks must have data:
    - `technical_probe` must show a valid container with plausible duration/resolution
    - `visual_spotcheck` must have `frames_sampled >= 4`
    - `audio_spotcheck` must report narration/music presence
    - `promise_preservation` must confirm `delivery_promise_honored`
    - `subtitle_check` must report presence/absence
-   - Any check with missing data: **SUGGESTION** — "Self-review check [X] has incomplete data"
+   - For hero/overview, rendered semantic review must cover at least 12 frames and every scene at least once, including the 0–3 second hook.
+   - Hero/overview semantic review must score the premium dimensions defined in `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`.
+   - Any check with missing data: **SUGGESTION** for standard work; **CRITICAL** when the missing data is a required hero/overview premium or governance check.
 4. **Promise preservation**: If `promise_preservation.silent_downgrade_detected` is true: **CRITICAL** — "Self-review detected silent downgrade from motion-led to still-led."
 
 ### At publish stage:

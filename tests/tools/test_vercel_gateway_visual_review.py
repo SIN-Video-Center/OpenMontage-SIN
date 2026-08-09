@@ -12,11 +12,12 @@ from tools.audio.vercel_gateway_tts import GatewayCredential
 
 def _raw_review(status="pass"):
     names = [
-        "hook_0_3_seconds", "editorial_hierarchy", "primary_subject_scale",
+        "hook_0_3_seconds", "editorial_hierarchy", "keyframe_quality",
+        "focus_choreography", "surface_coherence", "primary_subject_scale",
         "ui_legibility", "label_readability", "dead_space_discipline",
-        "frame_and_container_discipline", "semantic_motion_clarity",
-        "caption_readability", "caption_rhythm", "evidence_story_alignment",
-        "professional_finish",
+        "frame_and_container_discipline", "semantic_motion_clarity", "motion_authorship",
+        "transition_quality", "restraint_and_density", "caption_readability",
+        "caption_rhythm", "evidence_story_alignment", "professional_finish",
     ]
     return {
         "status": status,
