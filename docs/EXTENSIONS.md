@@ -33,13 +33,13 @@ Core pipeline manifests are searched first, followed by enabled extension roots.
 5. Run core contract tests and each registered plugin's tests.
 6. Render the reference production and inspect final audio plus representative frames.
 
-External plugins and production repositories are not touched by an OpenMontage core update.
+External plugins and product-owned production workspaces are not touched by an OpenMontage core update. Product-specific films belong to their product repositories; a separate production repository is not required by the extension architecture.
 
 ## Current repositories
 
 - Core fork: `Delqhi/OpenMontage-SIN`
 - Overview plugin: `Delqhi/openmontage-overview-video`
-- Reference production: `Delqhi/openafd-overview-video`
+- Example product-owned production workspace: `OpenAfD-Chat/tooling/video/openafd-chat-overview/`
 
 ### Automated fork synchronization
 
