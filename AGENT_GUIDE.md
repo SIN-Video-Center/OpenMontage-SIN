@@ -73,6 +73,7 @@ The current schemas and registry are executable contracts, not documentation hin
 
 - `schemas/artifacts/proposal_packet.schema.json`
 - `schemas/artifacts/scene_plan.schema.json`
+- `schemas/artifacts/visual_design_plan.schema.json`
 - `schemas/artifacts/edit_decisions.schema.json`
 - `schemas/artifacts/final_review.schema.json`
 - `schemas/scene_types.registry.json`
@@ -83,7 +84,19 @@ Every spoken claim must map to a concrete visual state change: `primary_subject`
 
 All scene and cut times use one absolute final timeline. `in_seconds`/`out_seconds` place content in the finished video; `source_in_seconds` trims inside source media. Composition duration is the greatest `out_seconds`, not the sum of absolute cut durations.
 
-Every final render call passes the approved `proposal_packet`, complete `scene_plan`, and `edit_decisions` to `video_compose operation="render"`. The tool may not reconstruct the approved visual contract from reduced cut metadata. `final_review.status == "pass"` is the only deliverable state; both `revise` and `fail` block and return unsuccessful tool results.
+Every final render call passes the approved `proposal_packet`, complete `scene_plan`, and `edit_decisions` to `video_compose operation="render"`. For hero work and every `overview-video`, it also passes a schema-valid `visual_design_plan`. The tool may not reconstruct the approved visual contract from reduced cut metadata. `final_review.status == "pass"` is the only deliverable state; both `revise` and `fail` block and return unsuccessful tool results.
+
+### Visual Design Before Motion — HARD RULE
+
+For `quality_tier="hero"` and every `video_category="overview-video"`, the creative sequence is:
+
+`scene_plan → visual_design_plan → built art assets → rendered proof keyframes → approved keyframe board → motion choreography → composition → full render`
+
+Read `skills/meta/visual-design-director.md`. Do **not** start final Remotion/HyperFrames motion authoring immediately after the scene plan. Product screenshots, generated images, SVGs, diagrams and UI abstractions are raw visual material until they have been composed into delivery-resolution proof frames.
+
+The `visual_design_plan` chooses a visual concept, hero object, composition blueprint, intentional asset strategy, art assets and motion blueprint for every scene. There is no universal requirement to use SVG; choose the medium that best explains the scene. What is forbidden is letting generic layout code accidentally become the art direction.
+
+`video_compose` blocks hero/overview full rendering unless every scene has an approved proof keyframe whose file exists and the complete keyframe board is approved. A repeated screenshot + browser frame + headline + glow + slow zoom grammar is a design failure even if the file is technically perfect.
 
 Run `python scripts/generate_scene_contracts.py` whenever the canonical scene registry changes. Do not maintain parallel scene-type lists by hand.
 
@@ -202,7 +215,7 @@ This applies especially to:
 
 The agent itself orchestrates the production state machine:
 
-`research -> proposal -> script -> scene_plan -> assets -> edit -> compose`
+`research -> proposal -> script -> scene_plan -> [visual_design for hero/overview] -> assets -> edit -> compose`
 
 The agent:
 
@@ -577,6 +590,7 @@ Each stage produces one canonical artifact that becomes the contract for the nex
 | `idea` | `*-director.md` | `brief` | Clear hook, target platform, duration, tone, and user intent |
 | `script` | `*-director.md` | `script` | Structured sections, valid timing, coherent narration |
 | `scene_plan` | `*-director.md` | `scene_plan` | Absolute scenes plus visual before/action/after states, motion class, semantic purpose, and assets |
+| `visual_design` | `meta/visual-design-director.md` + category skill | `visual_design_plan` | Hero/overview visual concept, composition blueprint, built-art strategy, proof keyframes, approved keyframe board, motion blueprint |
 | `assets` | `*-director.md` | `asset_manifest` | Provenance, paths, model/tool metadata, scene linkage |
 | `edit` | `*-director.md` | `edit_decisions` | Absolute cuts, source trims, semantic-motion fields, overlays, captions, and audio |
 | `compose` | `*-director.md` | `render_report` + `final_review` | Governed output plus measured motion/freeze/repetition/audio/contract checks |
@@ -749,5 +763,5 @@ viewer-facing text must be Unicode NFC with correct orthography (`wählen`,
 
 Before creative work, read `schemas/video_categories.registry.json`. The approved `video_category` is the viewer-facing production grammar and is independent from pipeline, renderer family, composition mode, and render runtime. Copy it unchanged through proposal, scene plan, edit decisions, compose, final review, and publish. Load the active category skill under `skills/categories/` and its binding contract under `docs/categories/`. Planned categories are not production-ready and may not borrow the Overview-Video contract silently.
 
-For `overview-video`, read `skills/categories/overview-video.md` and `docs/categories/OVERVIEW_VIDEO.md`. In particular: verify brand pronunciation from generated and rendered audio; use real product evidence where available; tie semantic motion to spoken claims; reserve caption geometry without drawing an opaque full-width bar; and require category-specific final-review evidence.
+For `overview-video`, read `skills/categories/overview-video.md`, the external category plugin's `skills/categories/overview-video-visual-design.md`, and `docs/categories/OVERVIEW_VIDEO.md`. In particular: verify brand pronunciation from generated and rendered audio; use real product evidence where available; complete `visual_design_plan` and its approved keyframe board before final motion code; tie semantic motion to spoken claims; reserve caption geometry without drawing an opaque full-width bar; and require category-specific final-review evidence.
 

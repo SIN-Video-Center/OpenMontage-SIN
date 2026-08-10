@@ -16,7 +16,7 @@ Read the approved production contract before anything else: `proposal_packet.pro
 
 `final_review.checks.promise_preservation.render_runtime_used` must equal the runtime that actually ran; `runtime_swap_detected` must be `false` unless an approved decision authorizes the swap.
 
-**Pass both `proposal_packet` and the complete `scene_plan` to `video_compose.execute()`.** They are required for `operation="render"`. The tool refuses to reconstruct the approved contract from reduced cut metadata.
+**Pass `proposal_packet`, the complete `scene_plan`, and for hero/overview work the complete `visual_design_plan` to `video_compose.execute()`.** They are required for governed final rendering. The tool refuses to reconstruct the approved contract from reduced cut metadata, and hero/overview rendering is blocked until the visual-design package proves every scene with an approved keyframe board.
 
 ## Prerequisites
 
@@ -126,7 +126,14 @@ Before rendering, present the user with audio options and get their preferences.
 
 ### Step 3: Prepare Render Inputs
 
-For each cut in the edit decisions:
+For hero/overview work, first verify the `visual_design_plan`:
+1. Every scene ID is represented.
+2. Every scene has an intentional asset strategy and composition blueprint.
+3. Every scene has an approved proof keyframe whose file exists.
+4. The global keyframe board exists, contains every scene, and is approved.
+5. Final motion code implements the approved motion blueprint rather than substituting generic zoom/slide/glow behavior.
+
+Then, for each cut in the edit decisions:
 1. Verify the source asset exists at its declared path
 2. Check asset dimensions/duration match expectations
 3. Prepare transform parameters (scale, position, crop)
@@ -158,6 +165,7 @@ Call the `video_compose` tool with the complete contract:
   "proposal_packet": <proposal_packet artifact>,
   "script_path": <path to the approved script artifact; or pass script_text>,
   "scene_plan": <scene_plan artifact>,
+  "visual_design_plan": <visual_design_plan artifact; mandatory for hero/overview>,
   "edit_decisions": <edit_decisions artifact>,
   "asset_manifest": <asset_manifest artifact; optional only for Remotion Atelier>,
   "output_profile": "youtube_landscape",

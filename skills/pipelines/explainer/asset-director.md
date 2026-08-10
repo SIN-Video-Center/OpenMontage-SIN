@@ -2,7 +2,7 @@
 
 ## When to Use
 
-You are the Asset Producer for an approved explainer production. You have the proposal, approved script, and visual-beat scene plan. Produce only the assets required by the approved quality tier, authoring mode, runtime, and reference strategy: narration, source/generated motion, images, diagrams, UI/source captures, code, music, and SFX. Atelier compositions may own project-local assets, but every asset still needs provenance and an auditable manifest entry when applicable.
+You are the Asset Producer for an approved explainer production. You have the proposal, approved script, visual-beat scene plan, and — for hero/overview work — an approved `visual_design_plan`. Produce only the assets required by the approved quality tier, authoring mode, runtime, reference strategy, and visual-design package: narration, source/generated motion, custom SVG/vector art, procedural graphics, diagrams, UI/source captures, editorial raster illustration, masks/textures, code, music, and SFX. Atelier compositions may own project-local assets, but every asset still needs provenance and an auditable manifest entry when applicable.
 
 This is where plans become real files. A missing or low-quality asset will torpedo the final video.
 
@@ -36,6 +36,16 @@ Quick routing for common explainer needs:
 | Cost tracker | `tools/cost_tracker.py` | Budget governance |
 
 ## Process
+
+### Step 0: Enforce Visual Design Before Asset Batch
+
+For `quality_tier="hero"` or `video_category="overview-video"`, read `skills/meta/visual-design-director.md` and require a schema-valid `visual_design_plan` before generating or authoring the final visual assets.
+
+- Do not invent the visual approach while writing Remotion/HyperFrames code.
+- Do not treat raw screenshots plus generic CSS chrome as finished art assets.
+- Build the scene's declared `art_assets` first: truthful source crops, SVG/vector systems, procedural graphics, diagrams, UI abstractions, masks/textures, editorial raster illustration, kinetic-type layouts, 3D or video material as specified.
+- Render the proof keyframes at delivery resolution and approve the complete keyframe board before final motion authoring.
+- If a scene's only strategy is `source_capture`, challenge whether crop, matte, mask, depth plate, vector annotation, UI abstraction, or another truthful editorial treatment is required to make it designed rather than merely displayed.
 
 ### Step 1: Inventory Required Assets
 
@@ -128,6 +138,14 @@ Process asset tasks grouped by tool for efficiency:
 2. Apply playbook's `asset_generation.diagram_style`
 3. Generate SVG/PNG
 4. Verify all nodes and edges are present
+5. For hero/overview work, treat Mermaid output as geometry/source material when necessary; refine composition, labels, hierarchy, masks and emphasis into the project-specific visual language before calling it final key art.
+
+**Custom SVG / vector / procedural art**:
+1. Start from the approved `visual_design_plan.art_assets`, not from decorative impulse.
+2. Hand-author project-local SVG/React-SVG/Canvas geometry when the scene needs exact paths, connectors, masks, iconography or diagram relationships.
+3. Keep text that must be exact in the runtime or deterministic SVG; do not ask an image model to spell it.
+4. Design the static proof frame first. Verify paths, optical spacing, scale hierarchy and negative space before adding animation.
+5. Record the asset path and provenance in the asset manifest when the file is materialized.
 
 **Code snippets (`code_snippet`)**:
 1. Extract language and code from the scene description

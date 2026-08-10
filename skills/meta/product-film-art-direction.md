@@ -6,6 +6,8 @@ Read this for every `quality_tier="hero"` product, launch, brand, flagship expla
 
 This skill turns a brief into a frame-first motion direction before scene code is written. It supplements `taste-direction.md` and `bespoke-composition.md`; it does not provide a reusable visual template.
 
+For hero/overview work, read `skills/meta/visual-design-director.md` immediately after this skill. A separate `visual_design_plan` and approved keyframe board are required before full motion composition.
+
 Binding standard: `docs/PREMIUM_PRODUCT_FILM_STANDARD.md`.
 
 ## Core rule

@@ -10,6 +10,25 @@ The governing principle is simple:
 
 This standard closes the gap between "animated UI" and a directed product film.
 
+## 0. Visual design happens before motion code
+
+Hero and Overview productions must insert a dedicated visual-design stage between scene planning and asset/motion production:
+
+`narrative → scene plan → visual design → art assets → approved keyframe board → motion choreography → composition → render`
+
+The stage produces a schema-valid `visual_design_plan` (`schemas/artifacts/visual_design_plan.schema.json`). It decides the visual concept, composition blueprint and asset medium for every scene before final Remotion/HyperFrames code is authored.
+
+A scene may use truthful product captures, custom SVG/vector art, procedural graphics, vector diagrams, editorial raster illustration, UI abstraction, kinetic typography, 3D material, video source, or a deliberate combination. There is **no requirement that every scene use SVG**. The requirement is that the visual material is deliberately designed before animation rather than discovered accidentally while writing layout code.
+
+For hero/overview work, `video_compose` blocks the full render unless:
+
+- every scene appears in `visual_design_plan.scene_designs`;
+- every scene has a composition blueprint and intentional asset strategy;
+- every scene has at least one rendered proof keyframe with `status=approved` and an existing file;
+- the global keyframe board contains every scene and has `status=approved`.
+
+A raw screenshot plus generic browser frame, headline, glow and camera zoom is not a substitute for this stage.
+
 ## 1. Static keyframe quality floor
 
 Before full animation, every scene must have at least one representative **proof frame** that can stand on its own as a premium editorial/product keyvisual.

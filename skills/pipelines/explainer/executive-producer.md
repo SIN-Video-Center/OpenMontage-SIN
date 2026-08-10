@@ -22,7 +22,7 @@ The EP solves all of these by maintaining cumulative state and applying judgment
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Pipeline | `pipeline_defs/animated-explainer.yaml` | Stage definitions, review focus, success criteria |
-| Skills | All 7 director skills + `meta/reviewer` | Stage execution knowledge |
+| Skills | Stage skills declared by the active pipeline manifest + `meta/reviewer` | Stage execution knowledge |
 | Schemas | All artifact schemas | Validation |
 | Playbook | Active style playbook | Quality constraints |
 | Tools | Full tool registry | Available capabilities |
@@ -40,12 +40,13 @@ EP_STATE:
   budget_spent_usd: 0.0
   budget_remaining_usd: <budget_total>
 
-  # Accumulated from each stage (8 stages plus mandatory final_review)
+  # Accumulated from each stage declared by the active pipeline manifest plus mandatory final_review
   artifacts:
     research: null      # → research_brief
     proposal: null      # → proposal_packet (includes approval gate)
     script: null        # → script
     scene_plan: null    # → scene_plan
+    visual_design: null # → visual_design_plan when declared by the active pipeline (mandatory for hero/overview)
     assets: null        # → asset_manifest
     edit: null          # → edit_decisions
     compose: null       # → render_report + final_review
@@ -77,7 +78,7 @@ EP_STATE:
 
 ### Phase 1: Execute Stages Serially
 
-For each stage in order: `research → proposal → script → scene_plan → assets → edit → compose → publish`
+Execute **the stages in the exact order declared by the active pipeline manifest**. Do not substitute this skill's historical explainer sequence for the manifest. The ordinary explainer sequence may be `research → proposal → script → scene_plan → assets → edit → compose → publish`; hero/category plugins may insert required stages. In particular, `overview-video` inserts `visual_design` between `scene_plan` and `assets`, and skipping it is a gate violation.
 
 **Pre-production stages (research, proposal)** run before any money is spent:
 - **research** gathers raw data via web search — zero cost, no tools
@@ -231,6 +232,19 @@ CHECK: Asset feasibility
       REVISE scene_plan: "Tool {X} is unavailable. Use {alternative} instead."
 ```
 
+### After VISUAL_DESIGN stage (when declared):
+```
+CHECK: Design-before-motion contract
+  - Validate visual_design_plan against schemas/artifacts/visual_design_plan.schema.json
+  - Every scene in scene_plan has a matching scene_design
+  - Every scene has visual concept, hero object, composition blueprint, asset strategy, art-assets plan, and motion blueprint
+  - At least one proof keyframe per scene is rendered to a real file and approved
+  - Complete keyframe_board exists, covers every scene, and is approved
+  - Product/source captures are treated as evidence, not automatically as finished frame design
+  - Reject repeated screenshot-window/split-layout grammar, arbitrary decorative SVG, and animation authored before the board passes
+  - If the keyframe board is weak: REVISE visual_design. Do NOT continue to assets/compose hoping motion will rescue it.
+```
+
 ### After ASSETS stage:
 ```
 CHECK: Narration duration feedback loop (CRITICAL)
@@ -272,7 +286,7 @@ CHECK: A/V sync pre-validation
 ### After COMPOSE stage:
 ```
 CHECK: Governed output validation
-  - Require video_compose operation=render with proposal_packet, approved script, complete scene_plan, and edit_decisions
+  - Require video_compose operation=render with proposal_packet, approved script, complete scene_plan, edit_decisions, and visual_design_plan for hero/overview work
   - Require final_review.status == pass
   - Inspect ffprobe, scene-boundary/contact-sheet frames, 2-FPS motion coverage, freeze/repetition findings, rendered transcript, loudness/true peak, ducking, and subtitles
   - If duration drift > 5%: investigate which stage caused it
@@ -329,10 +343,11 @@ Actual: {what was produced}
 | G2 | proposal | Concept quality, cost accuracy, user approval | Revise proposal OR wait for user |
 | G3 | script | Word count vs duration, narrative arc, research integration | Revise script |
 | G4 | scene_plan | Absolute coverage, semantic visual beats, motion coverage, variety, feasibility, hero routing | Revise scene_plan |
-| G5 | assets | File existence, narration duration, budget, style | Revise assets OR send-back to script |
-| G6 | edit | Timeline completeness, A/V pre-sync | Revise edit |
-| G7 | compose | Governed render, actual-frame motion/freeze/repetition, rendered transcript, audio/subtitles, contract preservation | Revise compose OR send-back to proposal/script/scene/edit/assets |
-| G8 | publish | Metadata, packaging | Revise publish |
+| G5 | visual_design (when declared) | Visual concepts, asset strategy, composition blueprints, real proof keyframes, complete approved keyframe board | Revise visual_design; never move to motion to rescue weak frames |
+| G6 | assets | File existence, narration duration, budget, style, adherence to visual_design_plan | Revise assets OR send-back to script/visual_design |
+| G7 | edit | Timeline completeness, A/V pre-sync, visual design preservation | Revise edit |
+| G8 | compose | Governed render, actual-frame motion/freeze/repetition, rendered transcript, audio/subtitles, visual-design and contract preservation | Revise compose OR send-back to proposal/script/scene/visual_design/edit/assets |
+| G9 | publish | Metadata, packaging | Revise publish |
 | FINAL | all | Holistic video review | Send-back to specific stage |
 
 ## Execution Limits (Anti-Loop Protection)

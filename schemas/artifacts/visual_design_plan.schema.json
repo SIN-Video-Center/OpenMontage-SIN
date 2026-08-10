@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openmontage/artifacts/visual_design_plan",
+  "title": "Visual Design Plan",
+  "description": "Frame-first art and asset package created after scene planning and before motion composition. Hero/overview work must prove each scene as designed key art before full animation.",
+  "type": "object",
+  "required": ["version", "quality_tier", "visual_identity", "scene_designs", "keyframe_board"],
+  "properties": {
+    "version": {"type": "string", "const": "1.0"},
+    "quality_tier": {"type": "string", "enum": ["draft", "standard", "hero"]},
+    "video_category": {"type": "string"},
+    "visual_identity": {
+      "type": "object",
+      "required": ["design_thesis", "surface_system", "typography_system", "light_system", "depth_system", "signature_device", "restraint_rules"],
+      "properties": {
+        "design_thesis": {"type": "string", "minLength": 1},
+        "surface_system": {"type": "string", "minLength": 1},
+        "typography_system": {"type": "string", "minLength": 1},
+        "light_system": {"type": "string", "minLength": 1},
+        "depth_system": {"type": "string", "minLength": 1},
+        "signature_device": {"type": "string", "minLength": 1},
+        "restraint_rules": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    },
+    "scene_designs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["scene_id", "visual_concept", "hero_object", "composition_blueprint", "asset_strategy", "art_assets", "keyframes", "motion_blueprint"],
+        "properties": {
+          "scene_id": {"type": "string", "minLength": 1},
+          "visual_concept": {"type": "string", "minLength": 1},
+          "hero_object": {"type": "string", "minLength": 1},
+          "composition_blueprint": {
+            "type": "object",
+            "required": ["focal_zone", "negative_space", "foreground", "midground", "background", "evidence_legibility"],
+            "properties": {
+              "focal_zone": {"type": "string", "minLength": 1},
+              "negative_space": {"type": "string", "minLength": 1},
+              "foreground": {"type": "string", "minLength": 1},
+              "midground": {"type": "string", "minLength": 1},
+              "background": {"type": "string", "minLength": 1},
+              "evidence_legibility": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
+          "asset_strategy": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["source_capture", "svg_vector", "procedural_graphic", "vector_diagram", "raster_illustration", "ui_abstraction", "kinetic_typography", "3d_render", "video_source"]
+            }
+          },
+          "art_assets": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "kind", "purpose", "source_truth"],
+              "properties": {
+                "id": {"type": "string", "minLength": 1},
+                "kind": {"type": "string", "enum": ["source_capture", "svg_vector", "procedural_graphic", "vector_diagram", "raster_illustration", "ui_abstraction", "kinetic_typography", "3d_render", "video_source", "mask", "texture"]},
+                "purpose": {"type": "string", "minLength": 1},
+                "source_truth": {"type": "string", "enum": ["product_evidence", "derived_from_product", "generated_editorial", "decorative"]},
+                "path": {"type": "string"},
+                "generation_notes": {"type": "string"}
+              },
+              "additionalProperties": false
+            }
+          },
+          "keyframes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["moment", "frame_goal", "focal_subject", "hierarchy", "output_path", "status"],
+              "properties": {
+                "moment": {"type": "string", "enum": ["entry", "proof", "exit"]},
+                "frame_goal": {"type": "string", "minLength": 1},
+                "focal_subject": {"type": "string", "minLength": 1},
+                "hierarchy": {"type": "string", "minLength": 1},
+                "output_path": {"type": "string", "minLength": 1},
+                "status": {"type": "string", "enum": ["planned", "rendered", "approved", "rejected"]}
+              },
+              "additionalProperties": false
+            }
+          },
+          "motion_blueprint": {
+            "type": "object",
+            "required": ["primary_action", "focus_transfer", "secondary_action", "transition_handoff", "settle_state"],
+            "properties": {
+              "primary_action": {"type": "string", "minLength": 1},
+              "focus_transfer": {"type": "string", "minLength": 1},
+              "secondary_action": {"type": "string", "minLength": 1},
+              "transition_handoff": {"type": "string", "minLength": 1},
+              "settle_state": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "keyframe_board": {
+      "type": "object",
+      "required": ["output_path", "status", "scene_ids"],
+      "properties": {
+        "output_path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["planned", "rendered", "approved", "rejected"]},
+        "scene_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "review_notes": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": false
+}

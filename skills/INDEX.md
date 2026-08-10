@@ -283,8 +283,9 @@ Cross-cutting skills that apply to all pipelines:
 | Skill Creator | `meta/skill-creator.md` | Dynamically create new skills during pipeline runs |
 | Animation Runtime Selector | `meta/animation-runtime-selector.md` | Choose render runtime + animation library per scene |
 | Taste Direction | `meta/taste-direction.md` | Convert a brief into taste dials, anti-patterns, reference strategy, focal/surface/motion grammar, and quality floors |
-| Product Film Art Direction | `meta/product-film-art-direction.md` | Frame-first premium product-film contract: keyframe board, focal choreography, surface coherence, motion hierarchy, transition handoff |
-| Bespoke Composition (Atelier) | `meta/bespoke-composition.md` | Hand-author a composition from scratch (hero work) — no stock scene-types; routes art-direction → premium keyframes → motion principles → engine mechanics → atelier render |
+| Product Film Art Direction | `meta/product-film-art-direction.md` | Frame-first premium product-film contract: focal choreography, surface coherence, motion hierarchy, transition handoff |
+| Visual Design Director | `meta/visual-design-director.md` | Mandatory hero/overview bridge from scene plan to art assets: visual concepts, asset strategies, proof keyframes, approved keyframe board before motion code |
+| Bespoke Composition (Atelier) | `meta/bespoke-composition.md` | Hand-author a composition from scratch (hero work) — no stock scene-types; routes approved visual design → motion principles → engine mechanics → atelier render |
 
 ## Style Playbooks
 

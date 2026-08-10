@@ -136,6 +136,14 @@ class VideoCompose(BaseTool):
                     "to reconstruct weak metadata from cuts."
                 ),
             },
+            "visual_design_plan": {
+                "type": "object",
+                "description": (
+                    "Frame-first visual-design artifact created after scene planning and "
+                    "before motion composition. Required for hero/overview renders; it "
+                    "must prove every scene with approved keyframes and a keyframe board."
+                ),
+            },
             "narration_transcript_path": {
                 "type": "string",
                 "description": (
@@ -1304,6 +1312,7 @@ class VideoCompose(BaseTool):
         resolved_cuts: list[dict],
         scene_plan: list[dict] | dict[str, Any] | None = None,
         script_text: str | None = None,
+        visual_design_plan: dict[str, Any] | None = None,
     ) -> ToolResult | None:
         """Pre-compose quality gate — blocks render on critical violations.
 
@@ -1379,6 +1388,28 @@ class VideoCompose(BaseTool):
                 )
         except Exception as e:
             log.warning("Could not validate premium visual contract: %s", e)
+
+        # --- 2b. Visual-design-before-motion gate (hero / overview) ---
+        try:
+            from lib.visual_design_contract import validate_visual_design_plan
+            visual_design = validate_visual_design_plan(
+                visual_design_plan,
+                scene_plan_data if scene_plan_data else scenes,
+                quality_tier=str(quality_tier),
+                video_category=video_category,
+                require_files=True,
+            )
+            if visual_design.get("active"):
+                blocks.extend(
+                    f"Visual design contract violation: {issue}"
+                    for issue in visual_design.get("violations", [])
+                )
+                warnings.extend(
+                    f"Visual design contract: {issue}"
+                    for issue in visual_design.get("warnings", [])
+                )
+        except Exception as e:
+            log.warning("Could not validate visual design contract: %s", e)
 
         # Legacy/internal callers may still omit scene_plan, but operation='render'
         # rejects that before reaching this gate. Keep reconstruction only for direct
@@ -1854,7 +1885,11 @@ class VideoCompose(BaseTool):
                 for i, s in enumerate(atelier_scenes)
             ]
             validation_block = self._pre_compose_validation(
-                edit_decisions, synthetic_cuts, scene_plan, approved_script_text
+                edit_decisions,
+                synthetic_cuts,
+                scene_plan,
+                approved_script_text,
+                inputs.get("visual_design_plan"),
             )
             if validation_block is not None:
                 return validation_block
@@ -1920,7 +1955,11 @@ class VideoCompose(BaseTool):
 
         # --- Pre-compose validation gate ---
         validation_block = self._pre_compose_validation(
-            edit_decisions, resolved_cuts, scene_plan, approved_script_text
+            edit_decisions,
+            resolved_cuts,
+            scene_plan,
+            approved_script_text,
+            inputs.get("visual_design_plan"),
         )
         if validation_block is not None:
             return validation_block

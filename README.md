@@ -200,7 +200,7 @@ Or if you want the real-footage path:
 "Make a 75-second documentary montage about city life in the rain. Use real footage only, no narration, elegiac tone, with music."
 ```
 
-That's it. The agent researches your topic with live web search, writes and narrates the script with voice direction, plans concrete visual state changes, sources or generates the approved assets, and renders through the runtime and authoring mode locked at proposal. Before a video can be delivered, the system verifies the container, scene-boundary/contact-sheet frames, a 2-FPS motion stream, freeze intervals, repeated layouts, black frames, rendered-output transcript, loudness/true peak, ducking, delivery-promise/runtime preservation, and subtitles. `pass` is the only deliverable final-review state. Every provider selection is scored across 7 dimensions with an auditable decision log. Every creative decision gets your approval.
+That's it. The agent researches your topic with live web search, writes and narrates the script with voice direction, plans concrete visual state changes, and — for hero/overview work — performs a dedicated visual-design pass before final motion code: visual concepts, custom/source art assets, delivery-resolution proof keyframes, and an approved keyframe board. Only then does it author motion and render through the runtime and authoring mode locked at proposal. Before a video can be delivered, the system verifies the container, scene-boundary/contact-sheet frames, a 2-FPS motion stream, freeze intervals, repeated layouts, black frames, rendered-output transcript, loudness/true peak, ducking, delivery-promise/runtime preservation, and subtitles. `pass` is the only deliverable final-review state. Every provider selection is scored across 7 dimensions with an auditable decision log. Every creative decision gets your approval.
 
 > **No `make`?** macOS/Linux: `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r requirements.txt && cd remotion-composer && npm install && cd .. && python -m pip install piper-tts && cp .env.example .env`
 >
@@ -392,7 +392,7 @@ Edit your own talking-head footage. Generate a fully animated explainer from scr
 - **Live web research built in** — before writing a single word of script, the agent runs 15-25+ web searches across YouTube, Reddit, news sites, and academic sources to ground your video in real, current data
 - **Both free/local AND cloud providers** — every capability supports open-source local alternatives alongside premium APIs. Use what you have.
 - **No vendor lock-in** — swap providers freely. The scored selector ranks every provider across 7 dimensions (task fit, output quality, control, reliability, cost efficiency, latency, continuity) and picks the best match automatically.
-- **Production-grade quality gates** — delivery-promise and semantic-motion enforcement block slideshow-looking plans, hero work is routed to bespoke/Atelier authoring, and premium product/overview work is now frame-first: every scene declares a keyframe contract, focus path and primary/secondary/ambient motion hierarchy, passes a static keyframe board before full motion polish, then undergoes rendered semantic review for keyframe quality, focus choreography, surface coherence, motion authorship, transition quality and professional finish. Mandatory post-render review still measures the actual file: ffprobe, scene boundaries/contact sheet, 2-FPS motion/freeze/repetition, rendered transcript, loudness/true peak, ducking, subtitles, and runtime/promise preservation. `revise` and `fail` both block delivery.
+- **Production-grade quality gates** — delivery-promise and semantic-motion enforcement block slideshow-looking plans, hero work is routed to bespoke/Atelier authoring, and premium product/overview work now has a mandatory design-before-motion stage: every scene gets a visual concept, composition blueprint, intentional asset strategy and built art material; a real delivery-resolution proof keyframe and complete approved keyframe board are required before the full render can start. Motion is then authored from explicit focus and motion blueprints, followed by rendered semantic review for keyframe quality, focus choreography, surface coherence, motion authorship, transition quality and professional finish. Mandatory post-render review still measures the actual file: ffprobe, scene boundaries/contact sheet, 2-FPS motion/freeze/repetition, rendered transcript, loudness/true peak, ducking, subtitles, and runtime/promise preservation. `revise` and `fail` both block delivery.
 - **Budget governance built in** — cost estimation before execution, spend caps, per-action approval thresholds. No surprise bills.
 
 ---
@@ -420,10 +420,13 @@ Agent self-reviews using reviewer skill -- schema validation, playbook complianc
 Agent checkpoints state (JSON) -- resumable, with decision log and cost snapshot
  |
  v
+Hero/overview visual design -- build art assets + proof keyframes + approved keyframe board before motion
+ |
+ v
 Agent presents for your approval -- you stay in control at every creative decision
  |
  v
-Pre-compose validation gate -- delivery promise, slideshow risk, renderer governance
+Pre-compose validation gate -- delivery promise, visual-design proof, slideshow risk, renderer governance
  |
  v
 Render (Remotion, HyperFrames, or FFmpeg) -- approved runtime + templated/Atelier authoring mode preserved
@@ -639,7 +642,7 @@ OpenMontage treats video production like real engineering — with quality gates
 ### Quality Gates
 
 - **Human approval gates are enforced, not suggested** — proposal, script, scene plan, generated assets, and publish all pause for your sign-off. The checkpoint writer rejects a "completed" gated stage without recorded approval, and every superseded checkpoint is archived so the audit trail (including gate transitions) survives revisions. Review happens visually on the [Backlot board](#watch-it-happen--the-backlot-living-storyboard).
-- **Pre-compose validation** — requires the approved proposal, script, complete visual-beat scene plan, and edit contract; blocks delivery-promise violations, insufficient semantic motion, slideshow-risk `revise`/`fail` at final quality, hero/Atelier routing violations, missing hero/overview premium keyframe/focus/motion contracts, and runtime/composition swaps before render.
+- **Pre-compose validation** — requires the approved proposal, script, complete visual-beat scene plan, and edit contract; hero/overview work additionally requires a schema-valid `visual_design_plan`, existing approved proof-keyframe files for every scene, and an approved complete keyframe board. The gate blocks delivery-promise violations, insufficient semantic motion, slideshow-risk `revise`/`fail` at final quality, hero/Atelier routing violations, missing visual-design/keyframe/focus/motion contracts, and runtime/composition swaps before render.
 - **Post-render self-review** — after every render, the runtime runs ffprobe, extracts representative and scene-boundary frames, creates a timestamped contact sheet, analyzes a 2-FPS stream for actual motion coverage, freeze intervals, repeated layouts, and black frames, transcribes the rendered output against the approved script, measures loudness/true peak and ducking, and checks subtitle/caption presence. Only `status="pass"` is deliverable.
 - **Slideshow risk scoring** — semantic visual state changes, repetition, decorative/camera-only motion, shot intent, typography overreliance, and unsupported cinematic claims are evaluated before compose; rendered-frame QA then verifies that the intended motion actually exists.
 - **Source media inspection** — when users supply their own footage, the system probes every file (resolution, codec, audio channels, duration) and builds planning implications before a single creative decision is made. No hallucinating content from filenames.
