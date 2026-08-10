@@ -134,3 +134,21 @@ def test_missing_proof_file_blocks_full_render(tmp_path: Path):
     )
     assert result["valid"] is False
     assert any("does not exist" in issue for issue in result["violations"])
+
+
+def test_relative_proof_paths_resolve_from_product_workspace(tmp_path: Path):
+    plan = _design(tmp_path)
+    for scene in plan["scene_designs"]:
+        proof = Path(scene["keyframes"][0]["output_path"])
+        scene["keyframes"][0]["output_path"] = proof.relative_to(tmp_path).as_posix()
+    board = Path(plan["keyframe_board"]["output_path"])
+    plan["keyframe_board"]["output_path"] = board.relative_to(tmp_path).as_posix()
+    result = validate_visual_design_plan(
+        plan,
+        _scene_plan(),
+        quality_tier="hero",
+        video_category="overview-video",
+        require_files=True,
+        base_path=tmp_path,
+    )
+    assert result["valid"] is True

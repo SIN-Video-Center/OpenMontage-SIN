@@ -35,6 +35,7 @@ def validate_visual_design_plan(
     quality_tier: str = "standard",
     video_category: str = "",
     require_files: bool = False,
+    base_path: str | Path | None = None,
 ) -> dict[str, Any]:
     active = str(quality_tier).lower() == "hero" or str(video_category).lower() == "overview-video"
     if not active:
@@ -42,6 +43,11 @@ def validate_visual_design_plan(
 
     violations: list[str] = []
     warnings: list[str] = []
+    root = Path(base_path).expanduser().resolve() if base_path is not None else Path.cwd()
+
+    def resolved(path_value: str) -> Path:
+        path = Path(path_value).expanduser()
+        return path if path.is_absolute() else (root / path).resolve()
     if not isinstance(visual_design_plan, dict):
         return {
             "active": True,
@@ -130,7 +136,7 @@ def validate_visual_design_plan(
                 violations.append(f"{scene_id}: approved proof keyframe has no output_path")
                 continue
             proof_paths.append(path_value)
-            if require_files and not Path(path_value).expanduser().is_file():
+            if require_files and not resolved(path_value).is_file():
                 violations.append(f"{scene_id}: approved proof keyframe file does not exist: {path_value}")
 
         motion = design.get("motion_blueprint") or {}
@@ -144,7 +150,7 @@ def validate_visual_design_plan(
     board_path = str(board.get("output_path") or "").strip()
     if not board_path:
         violations.append("keyframe_board.output_path is required")
-    elif require_files and not Path(board_path).expanduser().is_file():
+    elif require_files and not resolved(board_path).is_file():
         violations.append(f"keyframe board file does not exist: {board_path}")
     board_ids = [str(value) for value in (board.get("scene_ids") or [])]
     if expected_ids and set(board_ids) != set(expected_ids):

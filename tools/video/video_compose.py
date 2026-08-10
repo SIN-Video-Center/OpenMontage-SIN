@@ -144,6 +144,10 @@ class VideoCompose(BaseTool):
                     "must prove every scene with approved keyframes and a keyframe board."
                 ),
             },
+            "visual_design_root": {
+                "type": "string",
+                "description": "Workspace root used to resolve relative proof-keyframe and keyframe-board paths in visual_design_plan.",
+            },
             "narration_transcript_path": {
                 "type": "string",
                 "description": (
@@ -1313,6 +1317,7 @@ class VideoCompose(BaseTool):
         scene_plan: list[dict] | dict[str, Any] | None = None,
         script_text: str | None = None,
         visual_design_plan: dict[str, Any] | None = None,
+        visual_design_root: str | None = None,
     ) -> ToolResult | None:
         """Pre-compose quality gate — blocks render on critical violations.
 
@@ -1398,6 +1403,7 @@ class VideoCompose(BaseTool):
                 quality_tier=str(quality_tier),
                 video_category=video_category,
                 require_files=True,
+                base_path=visual_design_root,
             )
             if visual_design.get("active"):
                 blocks.extend(
@@ -1890,6 +1896,7 @@ class VideoCompose(BaseTool):
                 scene_plan,
                 approved_script_text,
                 inputs.get("visual_design_plan"),
+                inputs.get("visual_design_root"),
             )
             if validation_block is not None:
                 return validation_block
@@ -1960,6 +1967,7 @@ class VideoCompose(BaseTool):
             scene_plan,
             approved_script_text,
             inputs.get("visual_design_plan"),
+            inputs.get("visual_design_root"),
         )
         if validation_block is not None:
             return validation_block
