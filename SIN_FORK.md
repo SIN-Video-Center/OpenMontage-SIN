@@ -2,10 +2,8 @@
 
 ## Branches
 
-- `main` — canonical SIN branch, containing the merged `sin/production` extensions and upstream history.
-- `sin/production` — tested production branch containing the SIN platform extensions.
-- `sin/pre-upstream-20260802` — immutable pre-update recovery point.
-- `sin/core-snapshot-20260802` — original remote snapshot before the first upstream rebase.
+- `main` — sole canonical SIN branch, containing the merged SIN production extensions and upstream history.
+- Historical SIN production/snapshot branches were removed after their contents were verified in `main`.
 
 ## Remotes
 
@@ -21,12 +19,12 @@ upstream https://github.com/calesthio/OpenMontage.git
 
 ## Updating
 
-From a clean `sin/production` checkout:
+From a clean `main` checkout:
 
 ```bash
 ./scripts/sync_sin_upstream.sh
 ```
 
-The script refuses dirty worktrees, updates the fork's `main` only by fast-forward, merges official upstream into `sin/production`, runs the extension and Overview contract suite, and pushes only after tests pass.
+The script refuses dirty worktrees, merges official upstream into canonical `main`, runs the extension and Overview contract suite, and pushes only after tests pass.
 
 Do not use `git clean -fdx` in a production checkout. Machine-local plugin registration lives in `.openmontage/extensions.json`, and concrete productions live in their own repositories.

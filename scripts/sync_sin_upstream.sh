@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if [[ "$(git branch --show-current)" != "sin/production" ]]; then
-  echo "Run this script from branch sin/production." >&2
+if [[ "$(git branch --show-current)" != "main" ]]; then
+  echo "Run this script from branch main." >&2
   exit 2
 fi
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -31,8 +31,7 @@ python3 -m pytest -q \
   tests/tools/test_vercel_gateway_tts.py \
   tests/tools/test_voicebox_tts.py
 
-printf '%s\n' 'Pushing tested production branch and advancing canonical main...'
-git push origin sin/production
-git push origin HEAD:refs/heads/main
+printf '%s\n' 'Pushing tested canonical main...'
+git push origin main
 
 printf '%s\n' 'OpenMontage is synchronized.'
