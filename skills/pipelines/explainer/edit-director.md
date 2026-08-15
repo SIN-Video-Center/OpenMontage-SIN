@@ -31,17 +31,26 @@ Build a timeline map:
 ...
 ```
 
-### Step 2: Define Cuts
+### Step 2: Define Cuts on One Absolute Timeline
+
+`in_seconds` and `out_seconds` are absolute positions in the finished video. They are never trim offsets inside a source asset. Use `source_in_seconds` only when playback must begin partway through source media.
 
 Each cut defines what visual is shown and when:
 
 ```json
 {
   "id": "cut-1",
-  "source": "img-scene-1",
-  "in_seconds": 0,
-  "out_seconds": 10,
+  "source": "video-scene-2",
+  "type": "video",
+  "in_seconds": 10,
+  "out_seconds": 18,
+  "source_in_seconds": 3.2,
   "layer": "primary",
+  "motion_class": "source_motion",
+  "visual_state_before": "The raw query is waiting at the left edge.",
+  "visual_action": "The query enters the encoder and becomes a vector.",
+  "visual_state_after": "The vector reaches the nearest-neighbour index.",
+  "semantic_purpose": "Show transformation and retrieval, not generic activity.",
   "transform": {
     "scale": 1.0,
     "position": "center",
@@ -54,9 +63,11 @@ Each cut defines what visual is shown and when:
 ```
 
 **Layering rules:**
-- `primary` — main visual (one at a time)
-- `overlay` — text cards, stat cards, key terms (on top of primary)
-- `background` — solid color or texture behind everything
+- `primary` — main visual; primary cuts must not overlap unless the selected runtime explicitly supports and the scene plan requires it.
+- `overlay` — text/stat/key-term layers on top of the primary.
+- `background` — solid color, texture, or relevant motion layer behind everything.
+
+**Contract rule:** Copy the approved scene's `motion_class`, before/action/after states, semantic purpose, and primary subject into the corresponding cut. Do not replace these with a vague `animation` string.
 
 ### Step 3: Configure Subtitles
 
@@ -125,9 +136,11 @@ Adjust cut timing if any violates these rules.
 ### Step 6: Verify Edit Completeness
 
 **Timeline coverage:**
-- [ ] Cuts span full video duration (no black frames)
-- [ ] No overlapping primary cuts
-- [ ] Every scene in scene_plan has at least one corresponding cut
+- [ ] All cut timestamps are absolute final-timeline positions.
+- [ ] `source_in_seconds` is used for source trimming; `in_seconds` is never reused as a source seek.
+- [ ] Cuts span full video duration (no accidental black frames).
+- [ ] No overlapping primary cuts unless deliberately supported by the approved runtime.
+- [ ] Every scene in scene_plan has at least one corresponding cut and retains its semantic motion fields.
 
 **Asset references:**
 - [ ] Every cut's `source` references a valid asset_id from the manifest
@@ -163,8 +176,27 @@ Validate the edit_decisions artifact against the schema and persist via checkpoi
 
 ## Common Pitfalls
 
-- **Forgetting gaps**: If scene-1 ends at 10s and scene-2 starts at 10.5s, there's a 0.5s black frame. Check for gaps.
+- **Confusing timeline and trim time**: `in_seconds=10` means the cut starts at 10 seconds in the final video. To start 3.2 seconds into the source, set `source_in_seconds=3.2`.
+- **Forgetting gaps**: If scene-1 ends at 10s and scene-2 starts at 10.5s, there's a 0.5s black frame unless the gap is intentionally filled.
 - **Audio drift**: Narration audio may be slightly longer/shorter than planned. Adjust visual cuts to match actual narration durations, not planned durations.
 - **No ducking**: Music playing at full volume under narration makes the video unwatchable. Always configure ducking.
 - **Same transition everywhere**: Varying transitions creates rhythm. Use the playbook's allowed set, but don't use the same one for every cut.
 - **Subtitle font mismatch**: Subtitles should use the playbook's body font, not a random default.
+
+## Binding subtitle layout contract
+
+Subtitles require the complete machine-readable contract from
+`docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`: `language_code`,
+`unicode_normalization="NFC"`, `layout_policy`, `preferred_zone`, safe margin,
+rail size when applicable, and time-coded `protected_regions`. Copy every scene's
+protected regions into the EDL with scene and time identifiers. The EDL is invalid
+when subtitles are enabled but these fields are absent.
+
+Prefer phrase timing based on the final narration performance. Align each phrase
+with the scene's semantic visual action, not merely the scene start and end. A
+caption may never cover content; changing opacity, shrinking the font, or placing
+it over a quieter graphic does not resolve a collision.
+
+## Overview-Video category overlay
+
+Copy `video_category` unchanged. Configure captions with `visual_treatment="integrated-field"` and `full_width_background=false`. Final narration take durations define the timeline. Caption phrase onset, visual action onset, and spoken claim must describe the same beat.

@@ -22,7 +22,7 @@ The EP solves all of these by maintaining cumulative state and applying judgment
 | Layer | Resource | Purpose |
 |-------|----------|---------|
 | Pipeline | `pipeline_defs/animated-explainer.yaml` | Stage definitions, review focus, success criteria |
-| Skills | All 7 director skills + `meta/reviewer` | Stage execution knowledge |
+| Skills | Stage skills declared by the active pipeline manifest + `meta/reviewer` | Stage execution knowledge |
 | Schemas | All artifact schemas | Validation |
 | Playbook | Active style playbook | Quality constraints |
 | Tools | Full tool registry | Available capabilities |
@@ -40,15 +40,16 @@ EP_STATE:
   budget_spent_usd: 0.0
   budget_remaining_usd: <budget_total>
 
-  # Accumulated from each stage (8 stages)
+  # Accumulated from each stage declared by the active pipeline manifest plus mandatory final_review
   artifacts:
     research: null      # → research_brief
     proposal: null      # → proposal_packet (includes approval gate)
     script: null        # → script
     scene_plan: null    # → scene_plan
+    visual_design: null # → visual_design_plan when declared by the active pipeline (mandatory for hero/overview)
     assets: null        # → asset_manifest
     edit: null          # → edit_decisions
-    compose: null       # → render_report
+    compose: null       # → render_report + final_review
     publish: null       # → publish_log
 
   # Pre-production context (carried forward from research + proposal)
@@ -77,7 +78,7 @@ EP_STATE:
 
 ### Phase 1: Execute Stages Serially
 
-For each stage in order: `research → proposal → script → scene_plan → assets → edit → compose → publish`
+Execute **the stages in the exact order declared by the active pipeline manifest**. Do not substitute this skill's historical explainer sequence for the manifest. The ordinary explainer sequence may be `research → proposal → script → scene_plan → assets → edit → compose → publish`; hero/category plugins may insert required stages. In particular, `overview-video` inserts `visual_design` between `scene_plan` and `assets`, and skipping it is a gate violation.
 
 **Pre-production stages (research, proposal)** run before any money is spent:
 - **research** gathers raw data via web search — zero cost, no tools
@@ -119,8 +120,8 @@ EXECUTE_STAGE(stage_name):
      If REVISE:
        - Increment revision_counts[stage_name]
        - If revision_counts[stage_name] >= 3:
-           - PASS WITH WARNINGS (never block forever)
-           - Log unresolved issues
+           - ESCALATE unresolved critical findings to the user or stop the stage
+           - Never convert schema, delivery-promise, runtime, hero/atelier, or final-review failures into warnings
        - Else:
            - Compose specific feedback for the director
            - Re-run SPAWN DIRECTOR with feedback injected
@@ -137,37 +138,38 @@ EXECUTE_STAGE(stage_name):
 
 ### Phase 2: Final Quality Assurance
 
-After all 7 stages complete, the EP performs a holistic review:
+After compose and before publish, the EP consumes the structured `final_review` produced by `video_compose`. It does not replace measured QA with an informal visual impression:
 
 ```
 FINAL_QA:
-  1. PROBE the output video:
-     - Duration: within ±5% of target?
-     - Resolution: matches media profile?
-     - Audio: narration audible throughout? Music balanced?
-     - File: valid container, reasonable size?
+  1. REQUIRE `final_review.status == "pass"`:
+     - `revise` and `fail` are blocking; do not publish or present as final
+     - Verify proposal/runtime/composition/delivery-promise preservation
 
-  2. A/V SYNC CHECK:
-     - Compare narration timestamps to visual cut points
-     - Flag any section where narration plays over the wrong visual
-     - Tolerance: ±0.5 seconds
+  2. VERIFY RENDER-BASED VISUAL QA:
+     - scene-boundary and representative frames exist
+     - timestamped contact sheet exists
+     - 2-FPS rendered-motion analysis completed
+     - no unapproved freeze/non-semantic hold >= 2.5 seconds
+     - repeated-layout and black-frame gates pass
 
-  3. STYLE CONSISTENCY:
-     - Review all generated images: do they look like the same video?
-     - Check color palette adherence
-     - Check typography consistency
+  3. VERIFY RENDERED AUDIO:
+     - actual rendered output was transcribed and compared to approved script for hero/broadcast work
+     - loudness, true peak, clipping, missing audio, and ducking gates pass
+     - subtitle/caption presence and timing pass
 
-  4. BUDGET RECONCILIATION:
-     - Total actual spend vs. budget
-     - Log per-stage cost breakdown
+  4. STYLE + BUDGET RECONCILIATION:
+     - compare actual boundary frames/contact sheet to approved taste profile and scene inventory
+     - reconcile total actual spend vs. approved budget
 
   5. DECISION:
-     If all checks pass → APPROVE for publish stage
-     If issues found → Send back to the specific stage(s) that can fix them
-       - Audio issues → compose director
-       - Visual issues → asset director (regenerate) or scene director (replan)
-       - Duration issues → script director (rewrite)
-       - Sync issues → edit director (re-cut)
+     If structured final review passes → APPROVE for publish stage
+     If blocked → send back to the responsible stage
+       - Audio/transcript issues → compose or script director
+       - Freeze/repetition/semantic-motion issues → scene/edit/compose director
+       - Asset mismatch → asset director
+       - Runtime or production-contract mismatch → proposal/edit/compose director
+       - Duration or sync issues → script/edit director
 ```
 
 ## EP-Specific Cross-Stage Checks
@@ -212,11 +214,13 @@ CHECK: Word count vs. duration target
 
 ### After SCENE_PLAN stage:
 ```
-CHECK: Total scene duration covers full script
-  - Sum all scene durations
-  - Compare to script's total duration
-  - If gaps > 1 second: REVISE scene_plan
-  - If overlaps: REVISE scene_plan
+CHECK: Absolute scene timeline covers the full script
+  - Sort scenes by absolute start_seconds/end_seconds
+  - Final duration is max(end_seconds), never the sum of absolute end times
+  - Compare the covered interval 0..max(end_seconds) to the approved script duration
+  - If unintended gaps > 1 second: REVISE scene_plan
+  - If unsupported overlaps: REVISE scene_plan
+  - Verify every spoken claim has a complete before/action/after semantic-motion contract
 
 CHECK: Visual variety
   - Count consecutive same-type scenes
@@ -226,6 +230,19 @@ CHECK: Asset feasibility
   - For each required_asset, verify the tool exists in registry
   - If any asset requires a tool that's unavailable:
       REVISE scene_plan: "Tool {X} is unavailable. Use {alternative} instead."
+```
+
+### After VISUAL_DESIGN stage (when declared):
+```
+CHECK: Design-before-motion contract
+  - Validate visual_design_plan against schemas/artifacts/visual_design_plan.schema.json
+  - Every scene in scene_plan has a matching scene_design
+  - Every scene has visual concept, hero object, composition blueprint, asset strategy, art-assets plan, and motion blueprint
+  - At least one proof keyframe per scene is rendered to a real file and approved
+  - Complete keyframe_board exists, covers every scene, and is approved
+  - Product/source captures are treated as evidence, not automatically as finished frame design
+  - Reject repeated screenshot-window/split-layout grammar, arbitrary decorative SVG, and animation authored before the board passes
+  - If the keyframe board is weak: REVISE visual_design. Do NOT continue to assets/compose hoping motion will rescue it.
 ```
 
 ### After ASSETS stage:
@@ -254,9 +271,12 @@ CHECK: Style consistency
 ### After EDIT stage:
 ```
 CHECK: Timeline completeness
-  - Verify edit decisions cover 0 to total_duration with no gaps
-  - Verify all asset references point to existing files
-  - Verify audio ducking is configured for all narration segments
+  - Verify edit decisions use absolute final-timeline in_seconds/out_seconds
+  - Verify source_in_seconds alone is used for source-media seeks/trims
+  - Verify edit decisions cover 0 to max(out_seconds) with no unintended gaps
+  - Verify all asset references point to existing files or approved Atelier project-local assets
+  - Verify audio ducking is configured whenever narration and music coexist
+  - Verify proposal quality/runtime/composition mode and scene semantic-motion fields were preserved
 
 CHECK: A/V sync pre-validation
   - For each cut: narration_start aligns with visual_start (±0.5s)
@@ -265,11 +285,13 @@ CHECK: A/V sync pre-validation
 
 ### After COMPOSE stage:
 ```
-CHECK: Output validation
-  - ffprobe the output: duration, resolution, codec, audio channels
+CHECK: Governed output validation
+  - Require video_compose operation=render with proposal_packet, approved script, complete scene_plan, edit_decisions, and visual_design_plan for hero/overview work
+  - Require final_review.status == pass
+  - Inspect ffprobe, scene-boundary/contact-sheet frames, 2-FPS motion coverage, freeze/repetition findings, rendered transcript, loudness/true peak, ducking, and subtitles
   - If duration drift > 5%: investigate which stage caused it
-  - If audio missing: check audio_mixer configuration
-  - If resolution wrong: check media profile selection
+  - If audio/transcript is missing: check render audio contract and transcriber availability
+  - If resolution is wrong: check media profile selection
 ```
 
 ## Feedback Message Templates
@@ -320,11 +342,12 @@ Actual: {what was produced}
 | G1 | research | Data depth, source quality, angle diversity | Revise research |
 | G2 | proposal | Concept quality, cost accuracy, user approval | Revise proposal OR wait for user |
 | G3 | script | Word count vs duration, narrative arc, research integration | Revise script |
-| G4 | scene_plan | Coverage, variety, feasibility against production plan | Revise scene_plan |
-| G5 | assets | File existence, narration duration, budget, style | Revise assets OR send-back to script |
-| G6 | edit | Timeline completeness, A/V pre-sync | Revise edit |
-| G7 | compose | Output probe, duration, audio quality | Revise compose OR send-back to edit/assets |
-| G8 | publish | Metadata, packaging | Revise publish |
+| G4 | scene_plan | Absolute coverage, semantic visual beats, motion coverage, variety, feasibility, hero routing | Revise scene_plan |
+| G5 | visual_design (when declared) | Visual concepts, asset strategy, composition blueprints, real proof keyframes, complete approved keyframe board | Revise visual_design; never move to motion to rescue weak frames |
+| G6 | assets | File existence, narration duration, budget, style, adherence to visual_design_plan | Revise assets OR send-back to script/visual_design |
+| G7 | edit | Timeline completeness, A/V pre-sync, visual design preservation | Revise edit |
+| G8 | compose | Governed render, actual-frame motion/freeze/repetition, rendered transcript, audio/subtitles, visual-design and contract preservation | Revise compose OR send-back to proposal/script/scene/visual_design/edit/assets |
+| G9 | publish | Metadata, packaging | Revise publish |
 | FINAL | all | Holistic video review | Send-back to specific stage |
 
 ## Execution Limits (Anti-Loop Protection)
@@ -337,7 +360,7 @@ Actual: {what was produced}
 | Max total budget | Configurable (default $2) | Hard stop on spending |
 | Max total wall-time | 15 minutes | Timeout for entire pipeline |
 
-After any limit is hit: **proceed with warnings**, never block indefinitely.
+After any limit is hit: **escalate unresolved critical findings**. Draft-only non-critical suggestions may proceed with warnings; schema failures, delivery-promise failures, runtime/composition swaps, hero/atelier violations, and `final_review.status != pass` remain blocked.
 
 ## Integration with Existing Skills
 
@@ -416,8 +439,8 @@ The EP doesn't replace any director skill — it wraps them. Each director skill
 
 ## Common Pitfalls
 
-- **Over-revising**: The EP should be pragmatic. A "pretty good" script that's within duration is better than a "perfect" script after 5 rounds. Use the limits.
+- **Over-revising**: The EP should be pragmatic about non-critical creative refinements, but revision limits never waive schema, delivery-promise, runtime, hero/atelier, or final-review failures.
 - **Ignoring budget**: Don't let early stages consume all budget. Reserve at least 30% for assets + compose.
 - **Sending back too eagerly**: Minor issues (±10% duration) should be handled by adjusting downstream, not re-running upstream. Only send back for structural problems.
-- **Not probing outputs**: Always ffprobe the final video. Never trust metadata alone.
+- **Not inspecting rendered output**: ffprobe alone is insufficient. Require scene-boundary/contact-sheet frames, 2-FPS motion/freeze/repetition analysis, rendered-output transcription, loudness/true peak, ducking, subtitles, and a final `pass`.
 - **Losing style context**: The EP must carry style anchors forward. If image 1 uses a specific palette, image 5 must match. Pass this explicitly to the asset director.

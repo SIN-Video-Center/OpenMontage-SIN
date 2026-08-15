@@ -19,11 +19,14 @@ For each stage:
    1. Agent reads stage-director skill (Markdown)
    2. Agent calls Python tools via tool registry
    3. Agent writes checkpoint (JSON) with artifacts
-   4. Agent self-reviews using meta/reviewer skill
+   4. Agent self-reviews using binding meta/reviewer rules
    5. Human approval gate (if configured)
         |
         v
-Final video output
+Governed compose + measured final_review
+        |
+        v
+Publish/deliver only when final_review.status == "pass"
 ```
 
 ---
@@ -162,7 +165,7 @@ Selectors route based on: user preference when explicitly set, then scored ranki
 
 **Subtitle (1):** subtitle_gen
 
-**Video (18):** grok_video, heygen_video, higgsfield_video, veo_video, kling_video, runway_video, minimax_video, wan_video, hunyuan_video, cogvideo_video, ltx_video_local, ltx_video_modal, pexels_video, pixabay_video, video_selector, video_compose (FFmpeg), video_stitch, video_trimmer
+**Video:** generation/source providers plus `video_compose`, the governed Remotion/HyperFrames/FFmpeg composition entry point, and supporting stitch/trim tools. `video_compose operation="render"` preserves the approved runtime/composition contract and owns blocking final review.
 
 ---
 
@@ -276,11 +279,12 @@ Checkpoints persist pipeline state as JSON in the project's `pipeline/` director
 | `proposal_packet` | proposal | Concept options, production plan, cost estimates, approval gate |
 | `brief` | idea | Title, hook, key points, tone, style, platform, duration |
 | `script` | script | Timestamped sections with enhancement cues, pronunciation guides |
-| `scene_plan` | scene_plan | Scene definitions with type, description, timing |
-| `asset_manifest` | assets | Generated assets with path, source tool, scene association |
-| `edit_decisions` | edit | Editorial cuts with in/out timings |
+| `scene_plan` | scene_plan | Absolute timing plus per-beat primary subject, visual before/action/after state, motion class, semantic purpose, and assets |
+| `asset_manifest` | assets | Generated/source assets with path, provenance, tool, license, and scene association |
+| `edit_decisions` | edit | Absolute final-timeline cuts, `source_in_seconds` trims, semantic-motion fields, overlays, captions, and audio |
 | `render_report` | compose | Output metadata (format, resolution, duration) |
-| `publish_log` | publish | Platform publication entries with status |
+| `final_review` | compose | Actual-frame motion/freeze/repetition, rendered transcript, audio/subtitle, runtime, and delivery-promise gates |
+| `publish_log` | publish | Platform publication entries with status; allowed only after final-review pass |
 | `review` | (any) | Reviewer feedback and approval records |
 | `cost_log` | (any) | Budget tracking entries |
 
@@ -452,7 +456,9 @@ OpenMontage has a multi-runtime composition layer. Three engines live behind `vi
 A standalone Node.js/React subproject in `remotion-composer/` using [Remotion](https://www.remotion.dev/).
 
 - **React 18** + **Remotion 4.0** + **TypeScript 5.3**
-- Handles the existing scene-component stack (`text_card`, `stat_card`, charts, captions, `TalkingHead`, `CinematicRenderer`)
+- `composition_mode="templated"` uses the shared scene-component stack for drafts/repeatable standard work.
+- `composition_mode="atelier"` uses a project-local hand-authored composition for bespoke/hero work; stock creative imports are blocked.
+- Uses one absolute final timeline, local sequence durations, rendered transitions, segmented narration/SFX/captions, and music ducking.
 - Scripts: `start` (studio), `build` (render), `upgrade`
 
 ### HyperFrames (HTML/CSS/GSAP)
@@ -464,12 +470,14 @@ Consumed via `npx hyperframes` (no monorepo checkout needed). Runtime floor: Nod
 - Layer 3 skills vendored at `.agents/skills/hyperframes*/`; Layer 2 guide at `skills/core/hyperframes.md`
 - The `character-animation` pipeline uses HyperFrames as the production render package. Browser previews are QA/debug artifacts only, not the render path.
 
-### FFmpeg (fallback / simple cuts)
+### FFmpeg (explicit simple-cut runtime)
 
-- Handles pure concat/trim when no composition is needed
-- Also handles subtitle burn-in as a post-hoc operation
+- Handles pure sequential concat/trim when no composition is needed.
+- Uses absolute timeline placement and `source_in_seconds` for media seeks.
+- Rejects gaps/overlaps that a sequential concat cannot represent.
+- May handle post-hoc encoding/subtitle work, but is not an automatic creative fallback.
 
-`video_compose` reads `edit_decisions.render_runtime` and dispatches via `_render_via_hyperframes`, `_remotion_render`, or `_render_via_ffmpeg`. Silent runtime swaps are forbidden — the tool returns a structured blocker when the chosen runtime is unavailable. See `AGENT_GUIDE.md` → "Composition Runtimes (Inside video_compose)" and `skills/core/hyperframes.md` for the full decision matrix.
+`video_compose` reads the approved proposal plus `edit_decisions.render_runtime`/`composition_mode` and dispatches via `_render_via_hyperframes`, `_render_via_atelier`/`_remotion_render`, or `_render_via_ffmpeg`. It requires the approved script and complete scene plan for final rendering, blocks silent runtime/authoring-mode swaps, and returns success only when measured `final_review.status == "pass"`. See `AGENT_GUIDE.md`, `skills/core/remotion.md`, and `skills/core/hyperframes.md`.
 
 ---
 
@@ -523,3 +531,14 @@ tests/
 5. **Selector pattern over hard-coded providers** — Capabilities degrade gracefully. Missing an API key? The selector falls through to the next provider or a local alternative.
 
 6. **Skills over code for intelligence** — Creative decisions, quality checklists, review criteria, and prompt templates live in Markdown skills, not Python. This means the agent's behavior can be tuned by editing text files, not code.
+
+## Caption and language governance
+
+Caption layout is a cross-artifact contract documented in
+`docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`. Scene plans declare protected visual
+regions; edit decisions declare the final caption policy and time-coded regions;
+shared Remotion renderers physically reserve the caption rail; runtime collision
+checks fail on overlap; pre-compose validation blocks malformed geometry and
+German ASCII substitutions; final review records occlusion and Unicode status.
+This makes caption safety a deterministic delivery property rather than a visual
+suggestion.

@@ -33,6 +33,7 @@ function resolveAsset(src: string): string {
 }
 import { CinematicRendererProps, CinematicTone, CinematicVideoScene } from "./cinematic/types";
 import { CaptionOverlay } from "./components/CaptionOverlay";
+import { getReservedCaptionRailHeight, normalizeCaptionLayout } from "./components/captionLayout";
 
 const FPS = 30;
 
@@ -480,6 +481,17 @@ export const CinematicRenderer: React.FC<CinematicRendererProps> = ({
   music,
   captions,
 }) => {
+  const { height } = useVideoConfig();
+  const resolvedCaptionLayout = normalizeCaptionLayout(captions?.layout);
+  const captionRailHeight = captions?.words?.length
+    ? getReservedCaptionRailHeight(resolvedCaptionLayout, height)
+    : 0;
+  const visualStageStyle: React.CSSProperties = captionRailHeight > 0
+    ? resolvedCaptionLayout.preferredZone === "top"
+      ? { top: captionRailHeight, bottom: 0, overflow: "hidden" }
+      : { top: 0, bottom: captionRailHeight, overflow: "hidden" }
+    : { overflow: "hidden" };
+
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       {/* Layer 1: Narration audio */}
@@ -504,8 +516,10 @@ export const CinematicRenderer: React.FC<CinematicRendererProps> = ({
           fadeOutSeconds={music.fadeOutSeconds ?? 3}
         />
       ) : null}
-      {/* Layer 3: Video scenes */}
-      {scenes.map((scene) => (
+      {/* The visual stage reserves physical space for the caption rail. */}
+      <AbsoluteFill data-caption-safe-stage="true" style={visualStageStyle}>
+        {/* Layer 3: Video scenes */}
+        {scenes.map((scene) => (
         <Sequence
           key={scene.id}
           from={Math.round(scene.startSeconds * FPS)}
@@ -529,7 +543,8 @@ export const CinematicRenderer: React.FC<CinematicRendererProps> = ({
           )}
         </Sequence>
       ))}
-      {/* Layer 4: TikTok-style captions */}
+      </AbsoluteFill>
+      {/* Layer 4: captions */}
       {captions?.words ? (
         <CaptionOverlay
           words={captions.words}
@@ -538,6 +553,7 @@ export const CinematicRenderer: React.FC<CinematicRendererProps> = ({
           color={captions.color ?? "#F8FAFC"}
           highlightColor={captions.highlightColor ?? "#FBBF24"}
           backgroundColor={captions.backgroundColor ?? "rgba(0, 0, 0, 0.6)"}
+          layout={resolvedCaptionLayout}
         />
       ) : null}
     </AbsoluteFill>

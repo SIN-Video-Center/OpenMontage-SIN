@@ -67,6 +67,39 @@ When the user asks to make, create, produce, or generate any video content — a
 
 The intelligence is in the skills, not in improvised code. An agent that reads the director skills and Layer 3 knowledge will produce significantly better output than one that calls tools directly with generic prompts.
 
+## Canonical Production Contract (HARD RULE)
+
+The current schemas and registry are executable contracts, not documentation hints:
+
+- `schemas/artifacts/proposal_packet.schema.json`
+- `schemas/artifacts/scene_plan.schema.json`
+- `schemas/artifacts/visual_design_plan.schema.json`
+- `schemas/artifacts/edit_decisions.schema.json`
+- `schemas/artifacts/final_review.schema.json`
+- `schemas/scene_types.registry.json`
+
+The proposal locks `quality_tier`, `delivery_kind`, `motion_expectation`, `composition_mode`, `renderer_family`, and `render_runtime` before script or asset work. `quality_tier="hero"` requires bespoke/atelier authoring and an explicit art direction; the stock Explainer catalog may produce an animatic, never the hero final.
+
+Every spoken claim must map to a concrete visual state change: `primary_subject`, `visual_state_before`, `visual_action`, `visual_state_after`, `motion_class`, and `semantic_purpose`. A zoom, pan, decorative loop, animated gradient, or generic background clip does not by itself count as semantic motion.
+
+All scene and cut times use one absolute final timeline. `in_seconds`/`out_seconds` place content in the finished video; `source_in_seconds` trims inside source media. Composition duration is the greatest `out_seconds`, not the sum of absolute cut durations.
+
+Every final render call passes the approved `proposal_packet`, complete `scene_plan`, and `edit_decisions` to `video_compose operation="render"`. For hero work and every `overview-video`, it also passes a schema-valid `visual_design_plan`. The tool may not reconstruct the approved visual contract from reduced cut metadata. `final_review.status == "pass"` is the only deliverable state; both `revise` and `fail` block and return unsuccessful tool results.
+
+### Visual Design Before Motion — HARD RULE
+
+For `quality_tier="hero"` and every `video_category="overview-video"`, the creative sequence is:
+
+`scene_plan → visual_design_plan → built art assets → rendered proof keyframes → approved keyframe board → motion choreography → composition → full render`
+
+Read `skills/meta/visual-design-director.md`. Do **not** start final Remotion/HyperFrames motion authoring immediately after the scene plan. Product screenshots, generated images, SVGs, diagrams and UI abstractions are raw visual material until they have been composed into delivery-resolution proof frames.
+
+The `visual_design_plan` chooses a visual concept, hero object, composition blueprint, intentional asset strategy, art assets and motion blueprint for every scene. There is no universal requirement to use SVG; choose the medium that best explains the scene. What is forbidden is letting generic layout code accidentally become the art direction.
+
+`video_compose` blocks hero/overview full rendering unless every scene has an approved proof keyframe whose file exists and the complete keyframe board is approved. A repeated screenshot + browser frame + headline + glow + slow zoom grammar is a design failure even if the file is technically perfect.
+
+Run `python scripts/generate_scene_contracts.py` whenever the canonical scene registry changes. Do not maintain parallel scene-type lists by hand.
+
 ## What OpenMontage Is
 
 OpenMontage is an instruction-driven video production system. The AI agent IS the intelligence — it reads instructions (pipeline manifests + stage director skills + meta skills) and drives the pipeline using tools.
@@ -143,7 +176,7 @@ Orthogonal to *runtime* is *authoring mode*: **how** the composition is built. P
 - **Templated** — assemble the stock `cut.type` scene-types (`text_card`, `stat_card`, `bar_chart`, …) into the `Explainer`/`CinematicRenderer` compositions. Fast, cheap, reliable — and the reason most videos look alike. Right for batch output, localization variants, quick drafts, and low-stakes internal clips.
 - **Atelier** — **hand-author the composition from scratch**: bespoke scenes, a one-off theme, and motion written for this piece, rendered via `composition_mode: "atelier"` (see `video_compose` → `_render_via_atelier`). No reusable creative components; a fresh visual language every time.
 
-**Default to atelier for hero work** — marketing, launches, brand pieces, any single-deliverable explainer that must impress. The deciding rule: *reuse engine knowledge, never creative components.* In atelier mode the stock scene-type catalog, `hyperframes-registry` blocks, fixtures, and finished components are **off-limits** — they are frozen looks that reintroduce sameness. Before building, route through **`skills/meta/taste-direction.md`** to set the design read and taste dials, then **`skills/meta/bespoke-composition.md`**, which sequences: art direction (`visual-style`) → motion principles (Disney 12 via `framer-motion`/`lottie-bodymovin`) → engine mechanics (`remotion-best-practices` + the stock components read *only as a mechanics codex*) → render via the atelier path. Close with a **distinctness review**: *could this be any other product's video? does it reuse a look I've made before?* — the inverse of "does it match the reference." Atelier costs more tokens and iteration than templated; say so at proposal so the user opts in knowingly.
+**Default to atelier for hero work** — marketing, launches, brand pieces, any single-deliverable explainer that must impress. The deciding rule: *reuse engine knowledge, never creative components.* In atelier mode the stock scene-type catalog, `hyperframes-registry` blocks, fixtures, and finished components are **off-limits** — they are frozen looks that reintroduce sameness. Before building, route through **`skills/meta/taste-direction.md`** to set the design read and taste dials. For product/brand/launch hero work and every Overview Video, then load **`skills/meta/product-film-art-direction.md`** plus **`docs/PREMIUM_PRODUCT_FILM_STANDARD.md`** and lock the focal strategy, surface system, motion grammar, transition strategy, premium keyframe floor, restraint rules and hero moments. Then use **`skills/meta/bespoke-composition.md`**, which sequences: art direction → static keyframe board → motion principles → engine mechanics → render via the atelier path. Close with both a **distinctness review** (*could this be any other product's video?*) and a **paused-frame review** (*would the proof frames stand as premium product key art without motion?*). Atelier costs more tokens and iteration than templated; say so at proposal so the user opts in knowingly.
 
 ### Escalate Blockers Explicitly
 
@@ -182,7 +215,7 @@ This applies especially to:
 
 The agent itself orchestrates the production state machine:
 
-`research -> proposal -> script -> scene_plan -> assets -> edit -> compose`
+`research -> proposal -> script -> scene_plan -> [visual_design for hero/overview] -> assets -> edit -> compose`
 
 The agent:
 
@@ -407,11 +440,13 @@ For these requests:
 - Bubble critical issues immediately. If the chosen runtime is unavailable, fails to render, or provider clip generation fails in a way that blocks the approved treatment, stop and tell the user before proceeding.
 - Do not spend more tokens or time on downgraded output unless the user explicitly approves the downgrade as an animatic or proof-of-concept.
 
-**When Remotion is available**, the agent should design production plans around it:
-- Explainer videos with `flat-motion-graphics` playbook -> Remotion animated scenes, not Ken Burns
-- Data-driven videos -> Remotion stat cards and charts, not static image screenshots
-- Any pipeline using still images -> Remotion spring animations, not FFmpeg pan-and-zoom
-- **Screen demos of a CLI/terminal/install flow -> `TerminalScene` (synthetic screen recording), not OS-level capture.** See `.agents/skills/synthetic-screen-recording/SKILL.md`. Faster, deterministic, privacy-safe. Use real capture (`screen_recorder`, `cap_recorder`, `playwright-recording`) only when the demo is a real app UI or requires unpredictable live behavior.
+When Remotion is available, choose its authoring mode from the approved quality contract rather than treating it as a universal creative default:
+
+- `draft` or approved repeatable `standard` work may use the templated Explainer catalog.
+- A templated chart, card, or diagram counts as semantic motion only when information progressively changes with the narration.
+- `hero` Remotion work uses Atelier and project-local hand-authored scenes; stock creative components are forbidden in the final.
+- Still-image spring/zoom motion is classified as `camera_only`, not automatically as meaningful visual response.
+- **Screen demos of a CLI/terminal/install flow may use `TerminalScene` for draft/standard templated work or a project-specific synthetic UI in Atelier.** See `.agents/skills/synthetic-screen-recording/SKILL.md`. Use real capture (`screen_recorder`, `cap_recorder`, `playwright-recording`) when the actual app behavior is the evidence.
 
 ### Remotion scene types available in `remotion-composer/`
 
@@ -554,10 +589,11 @@ Each stage produces one canonical artifact that becomes the contract for the nex
 |------|---------------|------------------|------------------|
 | `idea` | `*-director.md` | `brief` | Clear hook, target platform, duration, tone, and user intent |
 | `script` | `*-director.md` | `script` | Structured sections, valid timing, coherent narration |
-| `scene_plan` | `*-director.md` | `scene_plan` | Ordered scenes, timings, asset requirements |
+| `scene_plan` | `*-director.md` | `scene_plan` | Absolute scenes plus visual before/action/after states, motion class, semantic purpose, and assets |
+| `visual_design` | `meta/visual-design-director.md` + category skill | `visual_design_plan` | Hero/overview visual concept, composition blueprint, built-art strategy, proof keyframes, approved keyframe board, motion blueprint |
 | `assets` | `*-director.md` | `asset_manifest` | Provenance, paths, model/tool metadata, scene linkage |
-| `edit` | `*-director.md` | `edit_decisions` | Concrete cuts, overlays, subtitle/music decisions |
-| `compose` | `*-director.md` | `render_report` | Output paths, encoding profile, verification notes |
+| `edit` | `*-director.md` | `edit_decisions` | Absolute cuts, source trims, semantic-motion fields, overlays, captions, and audio |
+| `compose` | `*-director.md` | `render_report` + `final_review` | Governed output plus measured motion/freeze/repetition/audio/contract checks |
 
 Stage contract rules:
 
@@ -568,14 +604,16 @@ Stage contract rules:
 
 ## Reviewer Protocol
 
-The reviewer is a meta skill (`skills/meta/reviewer.md`) — advisory, never directly blocks progression.
+The reviewer is a meta skill (`skills/meta/reviewer.md`) and its critical findings are binding.
 
 - Self-review after every stage execution, before checkpointing.
 - Load `review_focus` items from the pipeline manifest for the current stage.
-- Maximum two review rounds. After that, pass with warnings and move on.
-- Findings categorized: critical (must fix), suggestion (should fix), nitpick (nice-to-have).
-- Critical findings -> fix and re-review. Suggestions -> note and proceed.
-- Check playbook `quality_rules` as constraints, not suggestions.
+- Maximum two autonomous revision rounds. After that, unresolved critical findings escalate to the user or block the stage; they do not become warnings by repetition.
+- Findings are categorized as critical, suggestion, or nitpick.
+- Critical findings must be fixed and re-reviewed before a final/presentable/broadcast/hero artifact advances.
+- `slideshow_risk.verdict="revise"` blocks presentable, broadcast, hero, and Atelier work. Hero/Atelier average risk must remain below 2.0.
+- `final_review.status="revise"` and `final_review.status="fail"` both block delivery and publishing.
+- Check playbook `quality_rules`, schema contracts, delivery promises, runtime preservation, and render-based QA as constraints, not suggestions.
 
 ## Human Checkpoint Protocol
 
@@ -635,7 +673,7 @@ Tool rules:
 | `minimalist-diagram` | Technical deep-dives, architecture |
 | `ink-sketch` (Ink Theater) | Hand-drawn ink-on-white doodle animation; a character that draws itself, walks, dances; contraption explainers |
 
-For custom, atelier, brand, launch, or hero work, read `skills/meta/taste-direction.md` before choosing a playbook. Carry its `taste_profile` into the proposal so later stages can preserve the design read, visual variance, motion intensity, information density, reference strategy, and anti-patterns.
+For custom, atelier, brand, launch, or hero work, read `skills/meta/taste-direction.md` before choosing a playbook. Carry its `taste_profile` into the proposal so later stages can preserve the design read, visual variance, motion intensity, information density, reference strategy, and anti-patterns. For hero/product/brand/launch work and every `overview-video`, also read `skills/meta/product-film-art-direction.md` and carry `focal_strategy`, `surface_system`, `motion_grammar`, `transition_strategy`, `keyframe_quality_floor="premium-keyvisual"`, `restraint_rules`, and `hero_moments`. Each hero/overview scene then requires `keyframe_contract`, `focus_path`, and `motion_hierarchy`, and a representative static keyframe board must pass before full motion polish.
 
 ### Hand-drawn "doodle" animation → Ink Theater / Ink Puppet
 
@@ -711,3 +749,19 @@ The `.agents/skills/` directory is large. When you're not coming in through a to
 - Do not present a single unavailable tool in isolation. Always show the full capability picture: "X of Y providers configured for this capability."
 - Do not skip the Provider Menu at preflight. The user must see what they have AND what they could unlock.
 - Do not change provider, model, or render path without telling the user first and getting approval when the change is material.
+
+## Caption and Language Governance (Mandatory)
+
+Read `docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md` before planning or composing any
+video with speech. Captions consume real layout space; they never cover meaningful
+visuals. Every scene declares protected regions, every enabled subtitle contract
+declares `layout_policy`, and final delivery requires zero collisions. German
+viewer-facing text must be Unicode NFC with correct orthography (`wählen`,
+`souverän`, `eigenständig`); ASCII substitutions are render-blocking defects.
+
+## Video Category Contract
+
+Before creative work, read `schemas/video_categories.registry.json`. The approved `video_category` is the viewer-facing production grammar and is independent from pipeline, renderer family, composition mode, and render runtime. Copy it unchanged through proposal, scene plan, edit decisions, compose, final review, and publish. Load the active category skill under `skills/categories/` and its binding contract under `docs/categories/`. Planned categories are not production-ready and may not borrow the Overview-Video contract silently.
+
+For `overview-video`, read `skills/categories/overview-video.md`, the external category plugin's `skills/categories/overview-video-visual-design.md`, and `docs/categories/OVERVIEW_VIDEO.md`. In particular: verify brand pronunciation from generated and rendered audio; use real product evidence where available; complete `visual_design_plan` and its approved keyframe board before final motion code; tie semantic motion to spoken claims; reserve caption geometry without drawing an opaque full-width bar; and require category-specific final-review evidence.
+

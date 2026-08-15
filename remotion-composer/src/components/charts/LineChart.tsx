@@ -34,6 +34,7 @@ interface LineChartProps {
   yLabel?: string;
   animationStyle?: LineAnimationStyle;
   strokeWidth?: number;
+  sceneDurationFrames?: number;
 }
 
 export const LineChart: React.FC<LineChartProps> = ({
@@ -51,9 +52,11 @@ export const LineChart: React.FC<LineChartProps> = ({
   yLabel,
   animationStyle = "draw",
   strokeWidth = 3,
+  sceneDurationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationInFrames } = useVideoConfig();
+  const durationInFrames = sceneDurationFrames ?? compositionDurationInFrames;
 
   // Chart layout
   const chartLeft = 160;

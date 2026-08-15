@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "active_categories": ["overview-video"],
+  "categories": {
+    "overview-video": {
+      "display_name": "Overview-Video",
+      "status": "active",
+      "contract": "docs/categories/OVERVIEW_VIDEO.md",
+      "skill": "skills/categories/overview-video.md",
+      "purpose": "Explain what a product, system, organisation or capability is, why it matters, how it works at a high level, and why its claims are credible."
+    },
+    "advertising-spot": {"display_name": "Werbespot", "status": "planned"},
+    "social-media-clip": {"display_name": "Social-Media-Clip", "status": "planned"},
+    "tutorial": {"display_name": "Tutorial", "status": "planned"},
+    "documentary": {"display_name": "Dokumentation", "status": "planned"},
+    "satire-video": {"display_name": "Satire-Video", "status": "planned"},
+    "movie": {"display_name": "Movie", "status": "planned"},
+    "children-film": {"display_name": "Kinderfilm", "status": "planned"},
+    "ugc-clip": {"display_name": "UGC-Clip", "status": "planned"},
+    "product-video": {"display_name": "Produktvideo", "status": "planned"}
+  }
+}

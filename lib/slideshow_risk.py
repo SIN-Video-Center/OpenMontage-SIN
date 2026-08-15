@@ -148,32 +148,75 @@ def _score_decorative(scenes: list[dict]) -> dict[str, Any]:
 
 
 def _score_weak_motion(scenes: list[dict]) -> dict[str, Any]:
-    """Score whether camera movement is purposeful."""
-    total_moving = 0
-    purposeless_moving = 0
+    """Score semantic motion coverage, not just declared camera movement.
+
+    A zoom over a still or a decorative loop does not count as an explanatory
+    state change. Scenes earn semantic motion when they declare a meaningful
+    motion_class and a before/action/after visual beat.
+    """
+    semantic_classes = {
+        "source_motion",
+        "generated_motion",
+        "procedural_semantic_motion",
+        "character_motion",
+        "ui_interaction",
+    }
+    weak_classes = {"camera_only", "decorative_loop"}
+
+    semantic = 0
+    weak = 0
+    static = 0
+    incomplete_beats = 0
 
     for scene in scenes:
-        sl = scene.get("shot_language", {})
-        movement = sl.get("camera_movement", "static")
-        if movement not in ("static", "unspecified", None):
-            total_moving += 1
-            # Movement without shot_intent suggests arbitrary motion
-            if not scene.get("shot_intent"):
-                purposeless_moving += 1
+        motion_class = scene.get("motion_class")
+        has_state_change = all(
+            bool(scene.get(field))
+            for field in ("visual_state_before", "visual_action", "visual_state_after")
+        )
 
-    if total_moving == 0:
-        # No movement at all is fine for some styles, but scores moderate
-        return {"score": 1.5, "reason": "No camera movement defined (may be intentional for static style)"}
+        if motion_class in semantic_classes and has_state_change:
+            semantic += 1
+        elif motion_class in semantic_classes and not has_state_change:
+            weak += 1
+            incomplete_beats += 1
+        elif motion_class in weak_classes:
+            weak += 1
+        else:
+            static += 1
 
-    ratio = purposeless_moving / total_moving
-    score = min(5.0, ratio * 4.0)
+    total = max(1, len(scenes))
+    semantic_ratio = semantic / total
+    weak_ratio = weak / total
+    static_ratio = static / total
 
-    if ratio > 0.5:
-        reason = f"{purposeless_moving}/{total_moving} moving shots lack shot_intent"
+    score = min(
+        5.0,
+        (1.0 - semantic_ratio) * 4.0
+        + weak_ratio * 1.0
+        + (0.5 if incomplete_beats else 0.0),
+    )
+
+    if semantic == 0:
+        reason = (
+            "No scene declares a complete semantic visual state change; camera-only "
+            "motion and decorative loops do not satisfy the motion contract"
+        )
     else:
-        reason = "Camera movement appears purposeful"
+        reason = (
+            f"Semantic motion in {semantic}/{total} scenes; weak/decorative in "
+            f"{weak}/{total}; static/undeclared in {static}/{total}"
+        )
+        if incomplete_beats:
+            reason += f"; {incomplete_beats} semantic classes lack before/action/after states"
 
-    return {"score": round(score, 1), "reason": reason}
+    return {
+        "score": round(score, 1),
+        "reason": reason,
+        "semantic_motion_ratio": round(semantic_ratio, 3),
+        "camera_or_decorative_ratio": round(weak_ratio, 3),
+        "static_ratio": round(static_ratio, 3),
+    }
 
 
 def _score_weak_intent(scenes: list[dict]) -> dict[str, Any]:

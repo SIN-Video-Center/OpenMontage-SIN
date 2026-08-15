@@ -26,6 +26,7 @@ interface PieChartProps {
   centerValue?: string;
   showLegend?: boolean;
   animationStyle?: PieAnimationStyle;
+  sceneDurationFrames?: number;
 }
 
 export const PieChart: React.FC<PieChartProps> = ({
@@ -40,9 +41,11 @@ export const PieChart: React.FC<PieChartProps> = ({
   centerValue,
   showLegend = true,
   animationStyle = "expand",
+  sceneDurationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps, durationInFrames: compositionDurationInFrames } = useVideoConfig();
+  const durationInFrames = sceneDurationFrames ?? compositionDurationInFrames;
 
   const total = data.reduce((sum, d) => sum + d.value, 0) || 1;
 

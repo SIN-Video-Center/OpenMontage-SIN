@@ -2,116 +2,602 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "openmontage/artifacts/scene_plan",
   "title": "Scene Plan",
-  "description": "Ordered scene list produced by the Scene Planner agent.",
+  "description": "Ordered scene list and visual beat map produced by the Scene Planner agent. Scene types mirror schemas/scene_types.registry.json.",
   "type": "object",
-  "required": ["version", "scenes"],
+  "required": [
+    "version",
+    "quality_tier",
+    "delivery_kind",
+    "motion_expectation",
+    "scenes"
+  ],
   "properties": {
-    "version": { "type": "string", "const": "1.0" },
-    "style_playbook": { "type": "string", "description": "Name of the active style playbook" },
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "style_playbook": {
+      "type": "string",
+      "description": "Name of the active style playbook"
+    },
+    "quality_tier": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "standard",
+        "hero"
+      ]
+    },
+    "delivery_kind": {
+      "type": "string",
+      "enum": [
+        "templated",
+        "bespoke"
+      ]
+    },
+    "motion_expectation": {
+      "type": "string",
+      "enum": [
+        "calm",
+        "motion_led",
+        "cinematic"
+      ]
+    },
     "scenes": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "type", "description", "start_seconds", "end_seconds"],
+        "required": [
+          "id",
+          "type",
+          "description",
+          "start_seconds",
+          "end_seconds",
+          "primary_subject",
+          "visual_state_before",
+          "visual_action",
+          "visual_state_after",
+          "motion_class",
+          "semantic_purpose"
+        ],
         "properties": {
-          "id": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
           "type": {
             "type": "string",
-            "enum": ["talking_head", "broll", "animation", "character_scene", "diagram", "text_card", "transition", "generated", "screen_recording"]
+            "enum": [
+              "talking_head",
+              "broll",
+              "video",
+              "animation",
+              "character_scene",
+              "diagram",
+              "text_card",
+              "transition",
+              "generated",
+              "screen_recording",
+              "hero_title",
+              "stat_card",
+              "bar_chart",
+              "line_chart",
+              "pie_chart",
+              "kpi_grid",
+              "comparison",
+              "callout",
+              "progress_bar",
+              "anime_scene",
+              "terminal_scene",
+              "screenshot_scene"
+            ]
           },
-          "description": { "type": "string" },
-          "start_seconds": { "type": "number", "minimum": 0 },
-          "end_seconds": { "type": "number", "minimum": 0 },
-          "script_section_id": { "type": "string" },
-          "framing": { "type": "string" },
-          "movement": { "type": "string" },
-          "transition_in": { "type": "string" },
-          "transition_out": { "type": "string" },
-          "overlay_notes": { "type": "string" },
+          "description": {
+            "type": "string"
+          },
+          "start_seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Absolute start on the final timeline"
+          },
+          "end_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Absolute end on the final timeline"
+          },
+          "script_section_id": {
+            "type": "string"
+          },
+          "spoken_phrase": {
+            "type": "string"
+          },
+          "primary_subject": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visual_state_before": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visual_action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visual_state_after": {
+            "type": "string",
+            "minLength": 1
+          },
+          "motion_class": {
+            "type": "string",
+            "enum": [
+              "source_motion",
+              "generated_motion",
+              "procedural_semantic_motion",
+              "character_motion",
+              "ui_interaction",
+              "camera_only",
+              "decorative_loop",
+              "static_hold"
+            ]
+          },
+          "semantic_purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "keyframe_contract": {
+            "type": "object",
+            "description": "Frame-first art-direction contract. Required by premium governance for hero/overview scenes.",
+            "required": ["focal_subject", "hierarchy", "proof_frame", "still_quality_goal"],
+            "properties": {
+              "focal_subject": {"type": "string", "minLength": 1},
+              "hierarchy": {"type": "string", "minLength": 1},
+              "proof_frame": {"type": "string", "minLength": 1},
+              "still_quality_goal": {
+                "type": "string",
+                "enum": ["functional", "editorial", "premium-keyvisual"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "focus_path": {
+            "type": "object",
+            "description": "Viewer-attention choreography through the beat. Required by premium governance for hero/overview scenes.",
+            "required": ["entry", "action", "proof", "exit"],
+            "properties": {
+              "entry": {"type": "string", "minLength": 1},
+              "action": {"type": "string", "minLength": 1},
+              "proof": {"type": "string", "minLength": 1},
+              "exit": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
+          "motion_hierarchy": {
+            "type": "object",
+            "description": "Primary semantic motion, supporting motion, subordinate ambience, and readable settle state.",
+            "required": ["primary", "secondary", "ambient", "settle"],
+            "properties": {
+              "primary": {"type": "string", "minLength": 1},
+              "secondary": {"type": "string", "minLength": 1},
+              "ambient": {"type": "string", "minLength": 1},
+              "settle": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          },
+          "entrance": {
+            "type": "string"
+          },
+          "build": {
+            "type": "string"
+          },
+          "hold_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "exit": {
+            "type": "string"
+          },
+          "sync_word": {
+            "type": "string"
+          },
+          "sound_accent": {
+            "type": "string"
+          },
+          "approved_hold_reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Explicit approval for an intentional non-semantic hold longer than 2.5 seconds. Use only with motion_class=static_hold."
+          },
+          "framing": {
+            "type": "string"
+          },
+          "movement": {
+            "type": "string"
+          },
+          "transition_in": {
+            "type": "string"
+          },
+          "transition_out": {
+            "type": "string"
+          },
+          "overlay_notes": {
+            "type": "string"
+          },
+          "overlays": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "content",
+                "placement"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "placement": {
+                  "type": "string"
+                },
+                "start_seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "end_seconds": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
           "shot_language": {
             "type": "object",
             "description": "Structured cinematography vocabulary for this scene",
             "properties": {
               "shot_size": {
                 "type": "string",
-                "enum": ["extreme_wide", "wide", "medium_wide", "medium", "medium_close", "close_up", "extreme_close_up", "over_shoulder", "insert", "establishing"]
+                "enum": [
+                  "extreme_wide",
+                  "wide",
+                  "medium_wide",
+                  "medium",
+                  "medium_close",
+                  "close_up",
+                  "extreme_close_up",
+                  "over_shoulder",
+                  "insert",
+                  "establishing",
+                  "not_applicable"
+                ]
               },
               "camera_movement": {
                 "type": "string",
-                "enum": ["static", "pan_left", "pan_right", "tilt_up", "tilt_down", "dolly_in", "dolly_out", "tracking_left", "tracking_right", "crane_up", "crane_down", "handheld", "steadicam", "whip_pan", "orbital", "zoom_in", "zoom_out", "rack_focus"]
+                "enum": [
+                  "static",
+                  "pan_left",
+                  "pan_right",
+                  "tilt_up",
+                  "tilt_down",
+                  "dolly_in",
+                  "dolly_out",
+                  "tracking_left",
+                  "tracking_right",
+                  "crane_up",
+                  "crane_down",
+                  "handheld",
+                  "steadicam",
+                  "whip_pan",
+                  "orbital",
+                  "zoom_in",
+                  "zoom_out",
+                  "rack_focus",
+                  "not_applicable"
+                ]
               },
-              "lens_mm": { "type": "integer", "enum": [14, 24, 35, 50, 85, 135, 200] },
+              "lens_mm": {
+                "type": "integer",
+                "enum": [
+                  14,
+                  24,
+                  35,
+                  50,
+                  85,
+                  135,
+                  200
+                ]
+              },
               "lighting_key": {
                 "type": "string",
-                "enum": ["high_key", "low_key", "natural", "golden_hour", "blue_hour", "tungsten_warm", "neon", "silhouette", "rim_lit", "volumetric", "overcast_soft"]
+                "enum": [
+                  "high_key",
+                  "low_key",
+                  "natural",
+                  "golden_hour",
+                  "blue_hour",
+                  "tungsten_warm",
+                  "neon",
+                  "silhouette",
+                  "rim_lit",
+                  "volumetric",
+                  "overcast_soft",
+                  "not_applicable"
+                ]
               },
-              "depth_of_field": { "type": "string", "enum": ["shallow", "medium", "deep"] },
-              "color_temperature": { "type": "string", "enum": ["cool", "neutral", "warm", "mixed"] }
+              "depth_of_field": {
+                "type": "string",
+                "enum": [
+                  "shallow",
+                  "medium",
+                  "deep",
+                  "not_applicable"
+                ]
+              },
+              "color_temperature": {
+                "type": "string",
+                "enum": [
+                  "cool",
+                  "neutral",
+                  "warm",
+                  "mixed",
+                  "not_applicable"
+                ]
+              }
             },
             "additionalProperties": false
           },
           "shot_intent": {
             "type": "string",
-            "description": "WHY this shot exists — what purpose it serves in the video"
+            "description": "Why this shot exists"
           },
           "narrative_role": {
             "type": "string",
-            "enum": ["establish_context", "introduce_subject", "build_tension", "deliver_payload", "transition", "emotional_beat", "evidence", "comparison", "resolution", "call_to_action"],
-            "description": "What role this scene plays in the narrative structure"
+            "enum": [
+              "establish_context",
+              "introduce_subject",
+              "build_tension",
+              "deliver_payload",
+              "transition",
+              "emotional_beat",
+              "evidence",
+              "comparison",
+              "resolution",
+              "call_to_action"
+            ]
           },
           "information_role": {
-            "type": "string",
-            "description": "What the viewer learns or feels from this scene"
+            "type": "string"
           },
           "hero_moment": {
             "type": "boolean",
-            "default": false,
-            "description": "True if this is the visual peak of the video — deserves extra attention"
+            "default": false
           },
           "character_actions": {
             "type": "array",
-            "description": "Character-specific acting beats for rigged character animation scenes",
             "items": {
               "type": "object",
-              "required": ["character_id", "action_sequence"],
+              "required": [
+                "character_id",
+                "action_sequence"
+              ],
               "properties": {
-                "character_id": { "type": "string" },
-                "emotion": { "type": "string" },
+                "character_id": {
+                  "type": "string"
+                },
+                "emotion": {
+                  "type": "string"
+                },
                 "action_sequence": {
                   "type": "array",
-                  "items": { "type": "string" },
+                  "items": {
+                    "type": "string"
+                  },
                   "minItems": 1
                 },
-                "dialogue": { "type": "string" },
-                "target": { "type": "string" },
-                "notes": { "type": "string" }
+                "dialogue": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
               },
               "additionalProperties": false
             }
           },
           "texture_keywords": {
             "type": "array",
-            "items": { "type": "string" },
-            "description": "Visual texture descriptors: grain, clean, anamorphic, gritty, ethereal, etc."
+            "items": {
+              "type": "string"
+            }
           },
           "required_assets": {
             "type": "array",
             "items": {
               "type": "object",
+              "required": [
+                "type",
+                "description",
+                "source"
+              ],
               "properties": {
-                "type": { "type": "string" },
-                "description": { "type": "string" },
-                "source": { "type": "string", "enum": ["generate", "source", "provided", "record"] }
+                "type": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "generate",
+                    "source",
+                    "provided",
+                    "record"
+                  ]
+                }
               },
-              "required": ["type", "description", "source"]
+              "additionalProperties": false
             }
+          },
+          "protected_regions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "x",
+                "y",
+                "width",
+                "height"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "width": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                },
+                "height": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "caption_layout": {
+            "type": "object",
+            "required": [
+              "preferred_zone"
+            ],
+            "properties": {
+              "preferred_zone": {
+                "type": "string",
+                "enum": [
+                  "top",
+                  "bottom"
+                ]
+              },
+              "fallback_zones": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "top",
+                    "bottom"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
           }
         },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "motion_class": {
+                  "const": "static_hold"
+                }
+              },
+              "required": [
+                "motion_class"
+              ]
+            },
+            "then": {
+              "required": [
+                "shot_intent"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "approved_hold_reason"
+              ]
+            },
+            "then": {
+              "properties": {
+                "motion_class": {
+                  "const": "static_hold"
+                }
+              }
+            }
+          }
+        ],
         "additionalProperties": false
       },
       "minItems": 1
     },
-    "metadata": { "type": "object" }
+    "metadata": {
+      "type": "object"
+    },
+    "video_category": {
+      "type": "string",
+      "enum": [
+        "overview-video"
+      ],
+      "description": "Approved viewer-facing category copied from proposal without reinterpretation."
+    }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"quality_tier": {"const": "hero"}},
+        "required": ["quality_tier"]
+      },
+      "then": {
+        "properties": {
+          "scenes": {
+            "items": {
+              "required": ["keyframe_contract", "focus_path", "motion_hierarchy"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"video_category": {"const": "overview-video"}},
+        "required": ["video_category"]
+      },
+      "then": {
+        "properties": {
+          "scenes": {
+            "items": {
+              "required": ["keyframe_contract", "focus_path", "motion_hierarchy"]
+            }
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }

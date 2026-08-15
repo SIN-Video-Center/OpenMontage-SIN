@@ -264,3 +264,7 @@ This stage gates on human approval (`human_approval_default: true`). After revie
 checkpoint with `status="awaiting_human"`, present the summary (the Backlot board renders
 the artifact), and **END YOUR TURN**. Do not start the next stage in the same response.
 Approval is per-gate — an earlier "go ahead" does not cover this gate.
+
+## Overview-Video category overlay
+
+When `production_plan.video_category="overview-video"`, apply `skills/categories/overview-video.md`. Build pronunciation guides with separate display and spoken forms for every risky brand/acronym. The sample section must include the hardest pronunciation. Do not batch narration until its transcript matches an approved alias. Write adult causal prose, not disconnected slogan fragments.

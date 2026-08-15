@@ -34,20 +34,22 @@ OpenMontage separates two concepts:
   `cinematic-trailer`, `product-reveal`, etc.). Chosen at proposal.
 - **`render_runtime`** — the technical engine that realizes that grammar
   (`remotion`, `hyperframes`, `ffmpeg`). Also chosen at proposal.
+- **`composition_mode`** — `templated` or `atelier`. Hero work requires Atelier
+  regardless of whether the technical engine is Remotion or HyperFrames.
 
-Both are locked in `proposal_packet.schema.json` and carried through
-`edit_decisions` unchanged unless a `render_runtime_selection` decision is
-logged in `decision_log`. Silent runtime swaps are a contract violation.
+All are locked in `proposal_packet.schema.json` and carried through
+`edit_decisions` unchanged unless a new approved production decision is logged.
+Silent runtime or authoring-mode swaps are a contract violation.
 
 ### Decision matrix
 
 | Scenario | Prefer | Why |
 |----------|--------|-----|
-| Existing explainer, React scene component stack (text_card, stat_card, chart scenes, caption overlay, TalkingHead, CinematicRenderer) | **Remotion** | These compositions already exist in `remotion-composer/`. Reusing them is free; replicating them in HTML is not. |
+| Existing draft/repeatable standard explainer using the React component stack | **Remotion templated** | Reuse is efficient when the approved quality tier permits templates and every data scene has a semantic progressive build. |
 | Word-level caption burn / karaoke captions | **Remotion** | `remotion_caption_burn` is Remotion-specific and is NOT at parity on HyperFrames day 1. |
 | Avatar / lip-sync presenter | **Remotion** | `TalkingHead` composition lives in Remotion. No HyperFrames equivalent yet. |
 | Kinetic typography, heavy text motion, GSAP-native animation | **HyperFrames** | HTML/GSAP is the natural medium. Expressing this as Remotion `interpolate()` calls is slow and fragile. |
-| Product promo / launch reel / marketing title card | **HyperFrames** | CSS/GSAP composition grammar matches how designers already think about these. Templates (`kinetic-type`, `product-promo`, `swiss-grid`) give a strong starting point. |
+| Product promo / launch reel / marketing title card | **HyperFrames Atelier** | CSS/GSAP composition grammar matches the brief, but hero work is hand-authored from the approved art direction rather than delivered as an unchanged stock template. |
 | Website-to-video / UI-driven composition | **HyperFrames** | The `website-to-video` workflow exists for exactly this. |
 | Registry block needed (data chart, grain overlay, shimmer sweep, shader transition) | **HyperFrames** | The registry is HyperFrames-only. Remotion does not have `hyperframes add`. |
 | Synthetic UI / fake terminal / fake browser demo | Either — depends on existing coverage | OpenMontage already ships Remotion `TerminalScene` (see `synthetic-screen-recording` Layer 3). For UI chrome beyond terminal, HyperFrames HTML is easier. |
@@ -249,9 +251,7 @@ declaring a render complete:
    `class="clip"` on timed elements. MUST pass before render (contrast can
    be deferred with `--no-contrast` during iteration, but not for final).
 3. **`npx hyperframes render --quality standard`** — produces the MP4.
-4. **Post-render final review** — probe with ffprobe, sample frames,
-   transcribe audio, compare to script. Same contract as the Remotion path.
-   See `final_review.schema.json`.
+4. **Governed post-render final review** — return through `video_compose operation="render"` with proposal, approved script, complete scene plan, and EDL. The shared gate probes the file, extracts scene boundaries/contact sheet, analyzes a 2-FPS stream for actual motion/freeze/repetition, transcribes the rendered output against the script, measures loudness/true peak/ducking, checks subtitles, and preserves runtime/delivery promise. Only `status="pass"` is deliverable.
 
 If lint or validate fails, do **not** render. Fix the composition and re-run.
 Silent render from a failing composition is a contract violation — the whole
@@ -440,8 +440,8 @@ the `deterministicFonts.ts` mapping table. Safe bets: `Outfit`,
 | Pipeline | Status |
 |----------|--------|
 | `animation` | Wave 1 — HyperFrames is a first-class option for motion-graphics-heavy briefs |
-| `animated-explainer` | Wave 1 — HyperFrames viable when the concept is HTML/GSAP-native; Remotion remains default for data-chart-heavy explainers |
-| `screen-demo` | Wave 1 — HyperFrames viable for synthetic product UI; `TerminalScene` (Remotion) remains preferred for terminal-specific demos |
+| `animated-explainer` | Wave 1 — present both runtimes when available; route by approved quality tier, authoring mode, and brief grammar. No universal default. |
+| `screen-demo` | Wave 1 — HyperFrames is viable for synthetic product UI; Remotion `TerminalScene` is an efficient templated draft/standard option, while hero UI work is bespoke. |
 | `cinematic` | Wave 2 |
 | `hybrid` | Wave 2 |
 | `documentary-montage` | Wave 2 |

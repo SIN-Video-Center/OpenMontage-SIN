@@ -90,7 +90,7 @@ class HyperFramesCompose(BaseTool):
         "HTML/CSS/GSAP composition: kinetic typography, product promos, launch reels",
         "Motion-graphics-heavy briefs where the scene library in remotion-composer/ doesn't fit",
         "Website-to-video / UI-driven compositions",
-        "Registry-block-driven scenes (hyperframes add data-chart, grain-overlay, etc.)",
+        "Registry-block-assisted draft/standard scenes and hand-authored Atelier work", 
     ]
     not_good_for = [
         "Word-level caption burn (stays on Remotion in Phase 1)",
@@ -114,7 +114,8 @@ class HyperFramesCompose(BaseTool):
                     "add_block",
                 ],
                 "description": (
-                    "render: materialize workspace + lint + validate + render to MP4. "
+                    "render: for templated mode, materialize workspace then lint/validate/render; "
+                    "for Atelier, lint/validate/render an existing hand-authored workspace without overwriting it. "
                     "lint: run `hyperframes lint` on an existing workspace. "
                     "validate: run `hyperframes validate` (browser-based). "
                     "doctor: run `hyperframes doctor` to check environment. "
@@ -135,8 +136,9 @@ class HyperFramesCompose(BaseTool):
                 "type": "string",
                 "description": (
                     "Target HyperFrames workspace directory. Typically "
-                    "`projects/<name>/hyperframes/`. Required for every op "
-                    "except doctor."
+                    "`projects/<name>/hyperframes/`. In Atelier final rendering, "
+                    "edit_decisions.bespoke.workspace_path is authoritative. Required "
+                    "for every op except doctor."
                 ),
             },
             "output_path": {
@@ -147,14 +149,16 @@ class HyperFramesCompose(BaseTool):
                 "type": "object",
                 "description": (
                     "Full edit_decisions artifact — required for render and "
-                    "scaffold_workspace. Used to generate index.html + CSS."
+                    "scaffold_workspace. Templated mode generates index.html/CSS from "
+                    "cuts. Atelier mode requires bespoke.workspace_path, art_direction, "
+                    "scene_inventory, and total_duration_seconds and never scaffolds."
                 ),
             },
             "asset_manifest": {
                 "type": "object",
                 "description": (
-                    "Full asset_manifest artifact — required for render and "
-                    "scaffold_workspace. Used to resolve asset IDs to file paths."
+                    "Asset manifest used by templated scaffold/render. Optional for "
+                    "Atelier when the hand-authored workspace owns project-local assets."
                 ),
             },
             "playbook": {
@@ -181,10 +185,10 @@ class HyperFramesCompose(BaseTool):
             },
             "strict": {
                 "type": "boolean",
-                "default": False,
+                "default": True,
                 "description": (
-                    "If true, fail the render on any lint error. Matches "
-                    "`hyperframes render --strict`."
+                    "Fail render on any lint error. Final delivery is always strict; "
+                    "false is only meaningful for explicit authoring-time diagnostics."
                 ),
             },
             "skip_contrast": {
@@ -205,8 +209,8 @@ class HyperFramesCompose(BaseTool):
     resume_support = ResumeSupport.FROM_START
     idempotency_key_fields = ["operation", "workspace_path", "edit_decisions"]
     side_effects = [
-        "writes HTML/CSS/JS files into workspace_path",
-        "copies asset files into workspace_path/assets/",
+        "writes HTML/CSS/JS into workspace_path only in templated/scaffold mode; Atelier render leaves creative files untouched",
+        "copies asset files into workspace_path/assets/ only in templated/scaffold mode",
         "writes MP4 to output_path",
     ]
     user_visible_verification = [
@@ -375,12 +379,15 @@ class HyperFramesCompose(BaseTool):
 
     def estimate_runtime(self, inputs: dict[str, Any]) -> float:
         ed = inputs.get("edit_decisions") or {}
-        cuts = ed.get("cuts", [])
-        total = 0.0
-        for c in cuts:
-            out_s = float(c.get("out_seconds", 0) or 0)
-            in_s = float(c.get("in_seconds", 0) or 0)
-            total += max(0.0, out_s - in_s)
+        explicit = float(ed.get("total_duration_seconds", 0) or 0)
+        if explicit > 0:
+            total = explicit
+        else:
+            cuts = ed.get("cuts", [])
+            total = max(
+                (float(c.get("out_seconds", 0) or 0) for c in cuts),
+                default=0.0,
+            )
         return 30.0 + total * 0.5
 
     # ------------------------------------------------------------------
@@ -463,6 +470,15 @@ class HyperFramesCompose(BaseTool):
         """
         workspace = self._require_workspace(inputs)
         edit_decisions = inputs.get("edit_decisions") or {}
+        if str(edit_decisions.get("composition_mode", "templated")).lower() == "atelier":
+            return ToolResult(
+                success=False,
+                error=(
+                    "scaffold_workspace is forbidden for composition_mode='atelier'. "
+                    "Author the project-local HyperFrames workspace directly; the final "
+                    "render must lint/validate/render it without replacing its creative files."
+                ),
+            )
         asset_manifest = inputs.get("asset_manifest") or {}
         playbook = inputs.get("playbook") or {}
         profile_name = inputs.get("profile")
@@ -639,7 +655,12 @@ class HyperFramesCompose(BaseTool):
         )
 
     def _render(self, inputs: dict[str, Any]) -> ToolResult:
-        """Full pipeline: scaffold → lint → validate → render."""
+        """Lint, validate, and render a templated or hand-authored workspace.
+
+        Templated mode first generates the workspace from cuts/assets. Atelier mode
+        requires an existing bespoke workspace and deliberately leaves its creative
+        HTML/CSS/JS untouched before the quality gates run.
+        """
         runtime_ok = self._runtime_check()
         if not runtime_ok["runtime_available"]:
             return ToolResult(
@@ -653,7 +674,46 @@ class HyperFramesCompose(BaseTool):
                 data={"runtime_check": runtime_ok},
             )
 
-        workspace = self._require_workspace(inputs)
+        edit_decisions = inputs.get("edit_decisions") or {}
+        composition_mode = str(edit_decisions.get("composition_mode", "templated")).lower()
+        bespoke = edit_decisions.get("bespoke") or {}
+
+        if composition_mode == "atelier":
+            raw_workspace = bespoke.get("workspace_path") or inputs.get("workspace_path")
+            if not raw_workspace:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        "HyperFrames Atelier requires edit_decisions.bespoke.workspace_path "
+                        "pointing to an existing hand-authored workspace."
+                    ),
+                )
+            workspace = Path(raw_workspace).expanduser()
+            if not workspace.is_absolute():
+                workspace = (Path(__file__).resolve().parents[2] / workspace).resolve()
+            else:
+                workspace = workspace.resolve()
+            index_name = str(bespoke.get("index_path") or "index.html")
+            if not workspace.is_dir() or not (workspace / index_name).is_file():
+                return ToolResult(
+                    success=False,
+                    error=(
+                        f"HyperFrames Atelier workspace/index not found: {workspace} / "
+                        f"{index_name}. Author the workspace before final render."
+                    ),
+                )
+            if index_name != "index.html":
+                return ToolResult(
+                    success=False,
+                    error=(
+                        "The current HyperFrames CLI lint/validate/render contract expects "
+                        "workspace/index.html. Move or expose the approved Atelier entry at "
+                        "index.html before final render."
+                    ),
+                )
+        else:
+            workspace = self._require_workspace(inputs)
+
         output_path = Path(
             inputs.get("output_path") or (workspace / "renders" / "final.mp4")
         ).expanduser().resolve()
@@ -661,21 +721,32 @@ class HyperFramesCompose(BaseTool):
 
         steps: dict[str, Any] = {}
 
-        # 1. Scaffold — generate HTML/CSS/assets.
-        scaffold = self._scaffold(inputs)
-        steps["scaffold"] = scaffold.data
-        if not scaffold.success:
-            return ToolResult(
-                success=False,
-                error=f"Scaffold failed: {scaffold.error}",
-                data={"steps": steps},
-            )
+        # 1. Generate only templated work. Atelier must remain hand-authored.
+        if composition_mode == "atelier":
+            steps["scaffold"] = {
+                "skipped": True,
+                "reason": "atelier workspace is hand-authored and must not be overwritten",
+                "workspace": str(workspace),
+            }
+        else:
+            scaffold_inputs = dict(inputs)
+            scaffold_inputs["workspace_path"] = str(workspace)
+            scaffold = self._scaffold(scaffold_inputs)
+            steps["scaffold"] = scaffold.data
+            if not scaffold.success:
+                return ToolResult(
+                    success=False,
+                    error=f"Scaffold failed: {scaffold.error}",
+                    data={"steps": steps},
+                )
 
-        # 2. Lint — static contract checks.
+        # 2. Lint — static contract checks. Render is strict by default; a
+        # non-strict run is an explicit authoring diagnostic, never a final.
+        strict = bool(inputs.get("strict", True))
         lint = self._lint({"workspace_path": str(workspace)})
         steps["lint"] = lint.data
         if not lint.success:
-            if inputs.get("strict", False):
+            if strict:
                 return ToolResult(
                     success=False,
                     error=f"Lint failed (strict mode): {lint.error}",
@@ -745,6 +816,8 @@ class HyperFramesCompose(BaseTool):
                 "height": height,
                 "fps": fps,
                 "quality": quality,
+                "composition_mode": composition_mode,
+                "workspace_was_generated": composition_mode != "atelier",
                 "steps": steps,
             },
             artifacts=[str(output_path)],

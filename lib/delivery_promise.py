@@ -31,7 +31,7 @@ PROMISE_RULES: dict[str, dict[str, Any]] = {
     "motion_led": {
         "still_fallback_allowed": False,
         "requires_video_generation": True,
-        "min_motion_ratio": 0.7,  # At least 70% of cuts must be real motion (video/animation, not Remotion slides)
+        "min_motion_ratio": 0.8,  # Semantic motion coverage for presentable/final work
         "description": "Video's quality depends on real motion — generated video clips, footage, or animation.",
     },
     "source_led": {
@@ -43,38 +43,38 @@ PROMISE_RULES: dict[str, dict[str, Any]] = {
     "data_explainer": {
         "still_fallback_allowed": True,
         "requires_video_generation": False,
-        "min_motion_ratio": 0.0,
-        "description": "Data visualization and explanation. Motion graphics preferred but images acceptable.",
+        "min_motion_ratio": 0.6,
+        "description": "Data visualization and explanation. Data relationships must build progressively with the narration.",
     },
     "teacher_explainer": {
         "still_fallback_allowed": True,
         "requires_video_generation": False,
-        "min_motion_ratio": 0.0,
-        "description": "Educational content. Clarity and comprehension over spectacle.",
+        "min_motion_ratio": 0.5,
+        "description": "Educational content. Clarity comes from semantic visual changes, not static illustrated voice-over.",
     },
     "screen_demo": {
         "still_fallback_allowed": True,
         "requires_video_generation": False,
-        "min_motion_ratio": 0.0,
-        "description": "Screen recording or product demo. Legibility over cinematic dressing.",
+        "min_motion_ratio": 0.6,
+        "description": "Screen recording or product demo. UI interactions and state changes must track the narration.",
     },
     "avatar_presenter": {
         "still_fallback_allowed": False,
         "requires_video_generation": True,
-        "min_motion_ratio": 0.3,
-        "description": "AI avatar or talking head presentation. Requires video generation for presenter.",
+        "min_motion_ratio": 0.7,
+        "description": "AI avatar or talking head presentation. Requires sustained presenter or supporting semantic motion.",
     },
     "hybrid": {
         "still_fallback_allowed": True,
         "requires_video_generation": False,
-        "min_motion_ratio": 0.2,
-        "description": "Mix of source footage, generated content, and graphics.",
+        "min_motion_ratio": 0.4,
+        "description": "Mix of source footage, generated content, and graphics with meaningful visual response.",
     },
     "localization": {
         "still_fallback_allowed": True,
         "requires_video_generation": False,
-        "min_motion_ratio": 0.0,
-        "description": "Translation/dubbing of existing video. Preserving source timing and clarity.",
+        "min_motion_ratio": 0.3,
+        "description": "Translation/dubbing of existing video. Preserving source motion, timing, and clarity.",
     },
 }
 
@@ -121,75 +121,127 @@ class DeliveryPromise:
         if not cuts:
             return {"valid": False, "violations": ["No cuts provided"], "motion_ratio": 0.0}
 
-        # Count motion vs slide-grammar vs still cuts.
-        # Only real video/animation/avatar footage counts as motion.
-        # Remotion component scenes (text_card, chart, kpi_grid, etc.) are
-        # "animated slides" — they have transitions but are NOT real motion.
-        _SLIDE_GRAMMAR_TYPES = frozenset({
-            "text_card", "stat_card", "chart", "bar_chart",
-            "line_chart", "pie_chart", "kpi_grid", "comparison",
-            "progress", "callout",
+        # Measure duration-weighted semantic motion rather than trusting the mere
+        # presence of an animation field. Camera-only zooms and decorative loops do
+        # not explain a narrated beat; progressive charts, diagrams and UI changes do.
+        semantic_classes = frozenset({
+            "source_motion",
+            "generated_motion",
+            "procedural_semantic_motion",
+            "character_motion",
+            "ui_interaction",
         })
-        _REAL_MOTION_TYPES = frozenset({"video", "animation", "avatar"})
+        weak_classes = frozenset({"camera_only", "decorative_loop"})
+        inherently_semantic_types = frozenset({
+            "video", "animation", "avatar", "character_scene", "anime_scene",
+            "screen_recording", "terminal_scene", "screenshot_scene",
+        })
+        component_types = frozenset({
+            "text_card", "hero_title", "stat_card", "bar_chart", "line_chart",
+            "pie_chart", "kpi_grid", "comparison", "progress_bar", "callout",
+            "diagram",
+        })
 
-        motion_cuts = 0
-        slide_cuts = 0
-        still_cuts = 0
+        semantic_duration = 0.0
+        weak_duration = 0.0
+        static_duration = 0.0
+        total_duration = 0.0
+        semantic_cuts = 0
+        weak_cuts = 0
+        static_cuts = 0
+        long_nonsemantic_holds: list[str] = []
+
         for cut in cuts:
-            source = cut.get("source", "")
-            cut_type = cut.get("type", "")
+            start = float(cut.get("in_seconds", 0) or 0)
+            end = float(cut.get("out_seconds", start + 1) or (start + 1))
+            duration = max(0.001, end - start)
+            total_duration += duration
 
-            # Determine category for this cut
-            is_motion = False
-            is_slide = False
-
-            if source:
-                ext = source.rsplit(".", 1)[-1].lower() if "." in source else ""
-                if ext in ("mp4", "mov", "webm", "avi", "mkv"):
-                    is_motion = True
-            if cut_type in _REAL_MOTION_TYPES:
-                is_motion = True
-            elif cut_type in _SLIDE_GRAMMAR_TYPES:
-                is_slide = True
-
-            if is_motion:
-                motion_cuts += 1
-            elif is_slide:
-                slide_cuts += 1
-            else:
-                still_cuts += 1
-
-        total = motion_cuts + slide_cuts + still_cuts
-        # Motion ratio is real motion vs everything — slide grammar does NOT count
-        motion_ratio = motion_cuts / total if total > 0 else 0.0
-
-        # Check motion requirement
-        min_ratio = rules.get("min_motion_ratio", 0.0)
-        if self.motion_required and motion_ratio < min_ratio:
-            violations.append(
-                f"Motion ratio {motion_ratio:.0%} is below minimum {min_ratio:.0%} "
-                f"for {self.promise_type.value}. "
-                f"{motion_cuts}/{total} cuts have real motion "
-                f"({slide_cuts} are animated slides which do not count as motion)."
+            source = str(cut.get("source", ""))
+            cut_type = str(cut.get("type", ""))
+            motion_class = str(cut.get("motion_class", ""))
+            has_state_change = all(
+                bool(cut.get(field))
+                for field in ("visual_state_before", "visual_action", "visual_state_after")
             )
 
-        # Check still fallback (slides + stills both count as non-motion)
-        non_motion = slide_cuts + still_cuts
-        if not rules.get("still_fallback_allowed", True) and non_motion > total * 0.5:
+            if not motion_class and source:
+                ext = source.rsplit(".", 1)[-1].lower() if "." in source else ""
+                if ext in ("mp4", "mov", "webm", "avi", "mkv"):
+                    motion_class = "source_motion"
+            if not motion_class and cut_type in inherently_semantic_types:
+                motion_class = "procedural_semantic_motion"
+            if not motion_class and cut_type in component_types and has_state_change:
+                motion_class = "procedural_semantic_motion"
+            if not motion_class and (cut.get("animation") or (cut.get("transform") or {}).get("animation")):
+                motion_class = "camera_only"
+            if not motion_class:
+                motion_class = "static_hold"
+
+            if motion_class in semantic_classes and has_state_change:
+                semantic_duration += duration
+                semantic_cuts += 1
+            elif motion_class in semantic_classes or motion_class in weak_classes:
+                # A semantic label without concrete before/action/after states is an
+                # unproven intent declaration and therefore remains weak motion.
+                weak_duration += duration
+                weak_cuts += 1
+                if duration > 2.5:
+                    long_nonsemantic_holds.append(str(cut.get("id", "unknown")))
+            else:
+                static_duration += duration
+                static_cuts += 1
+                if duration > 2.5:
+                    long_nonsemantic_holds.append(str(cut.get("id", "unknown")))
+
+        motion_ratio = semantic_duration / total_duration if total_duration else 0.0
+        weak_ratio = weak_duration / total_duration if total_duration else 0.0
+        static_ratio = static_duration / total_duration if total_duration else 0.0
+
+        min_ratio = float(rules.get("min_motion_ratio", 0.0))
+        if self.quality_floor == "draft":
+            min_ratio *= 0.5
+        if motion_ratio < min_ratio:
+            violations.append(
+                f"Semantic motion coverage {motion_ratio:.0%} is below minimum "
+                f"{min_ratio:.0%} for {self.promise_type.value}/{self.quality_floor}. "
+                "Camera-only zooms and decorative loops do not count."
+            )
+
+        if self.quality_floor in ("presentable", "broadcast") and weak_ratio > 0.25:
+            violations.append(
+                f"Camera-only/decorative motion covers {weak_ratio:.0%} of the timeline; "
+                "the maximum for presentable/final work is 25%."
+            )
+
+        if self.quality_floor in ("presentable", "broadcast") and long_nonsemantic_holds:
+            violations.append(
+                "Non-semantic visual holds longer than 2.5s: "
+                + ", ".join(long_nonsemantic_holds)
+                + ". Add a narrated state change or explicitly shorten the hold."
+            )
+
+        nonsemantic_duration = weak_duration + static_duration
+        if not rules.get("still_fallback_allowed", True) and nonsemantic_duration > total_duration * 0.5:
             if self.approved_fallback != "still_led":
                 violations.append(
                     f"{self.promise_type.value} does not allow still-led fallback, "
-                    f"but {non_motion}/{total} cuts are non-motion (stills + animated slides). "
-                    f"User must approve 'still_led' fallback or provide motion content."
+                    f"but {nonsemantic_duration / total_duration:.0%} of the timeline "
+                    "is camera-only, decorative, or static."
                 )
 
         return {
             "valid": len(violations) == 0,
             "violations": violations,
             "motion_ratio": motion_ratio,
-            "motion_cuts": motion_cuts,
-            "slide_cuts": slide_cuts,
-            "still_cuts": still_cuts,
+            "semantic_motion_ratio": motion_ratio,
+            "camera_only_ratio": weak_ratio,
+            "static_ratio": static_ratio,
+            "motion_cuts": semantic_cuts,
+            "slide_cuts": weak_cuts,
+            "still_cuts": static_cuts,
+            "semantic_duration_seconds": round(semantic_duration, 3),
+            "total_duration_seconds": round(total_duration, 3),
         }
 
 

@@ -2,27 +2,28 @@
 
 ## When to Use
 
-You are the Asset Producer for a generated explainer video. You have a `scene_plan` with required assets and a `script` with narration text. Your job is to generate every asset needed: narration audio, images, diagrams, code snippets, and background music. Every file must exist on disk before you finish.
+You are the Asset Producer for an approved explainer production. You have the proposal, approved script, visual-beat scene plan, and — for hero/overview work — an approved `visual_design_plan`. Produce only the assets required by the approved quality tier, authoring mode, runtime, reference strategy, and visual-design package: narration, source/generated motion, custom SVG/vector art, procedural graphics, diagrams, UI/source captures, editorial raster illustration, masks/textures, code, music, and SFX. Atelier compositions may own project-local assets, but every asset still needs provenance and an auditable manifest entry when applicable.
 
 This is where plans become real files. A missing or low-quality asset will torpedo the final video.
 
 ## Animation authoring — which runtime
 
-Before authoring any animated Remotion component for this pipeline, read **`skills/meta/animation-runtime-selector.md`**. It's the routing authority for deciding between Remotion primitives and GSAP plugins.
+Before authoring any animated asset or component, preserve the approved `quality_tier`, `delivery_kind`, `motion_expectation`, `composition_mode`, and `render_runtime`, then read **`skills/meta/animation-runtime-selector.md`**. Runtime convenience cannot override hero/Atelier routing.
 
 Quick routing for common explainer needs:
 
 | Scene type | Recommended approach |
 |---|---|
-| Title card, fade, slide, scale | Remotion primitives — `interpolate()` + `spring()` |
+| Draft/standard templated title card, fade, slide, scale | Remotion primitives — `interpolate()` + `spring()` |
 | Word-level caption highlight synced to narration | Existing `CaptionOverlay` component (already in `remotion-composer/src/components/`) |
 | Per-character kinetic typography ("words explode in one letter at a time") | GSAP SplitText — read `.agents/skills/gsap-plugins/SKILL.md` |
 | Multi-step choreography across 4+ tweens | GSAP timeline — read `.agents/skills/gsap-timeline/SKILL.md` |
 | Logo build (line drawing, stroke reveal) | GSAP DrawSVG — read `.agents/skills/gsap-plugins/SKILL.md` |
-| Data chart (bar/line/pie/KPI) | Remotion built-in chart components — see `remotion-composer/SCENE_TYPES.md` |
+| Draft/standard data chart with progressive semantic build | Remotion templated chart components — see `remotion-composer/SCENE_TYPES.md` |
+| Hero/bespoke chart, title, UI, or motion scene | Hand-author in the approved Remotion/HyperFrames Atelier workspace; stock creative components are not the final |
 | Terminal or CLI demo | Remotion TerminalScene — read `.agents/skills/synthetic-screen-recording/SKILL.md` |
 
-**The keep-it-simple bias:** if Remotion primitives solve a scene in ≤ 20 lines, use them. Only pull in GSAP when the plugin genuinely earns its bundle weight.
+**The keep-it-simple bias applies only inside the approved authoring mode.** In templated work, prefer clear primitives over unnecessary dependencies. In hero/Atelier work, do not replace the approved bespoke visual language with a stock component merely because it takes fewer lines.
 
 ## Prerequisites
 
@@ -35,6 +36,16 @@ Quick routing for common explainer needs:
 | Cost tracker | `tools/cost_tracker.py` | Budget governance |
 
 ## Process
+
+### Step 0: Enforce Visual Design Before Asset Batch
+
+For `quality_tier="hero"` or `video_category="overview-video"`, read `skills/meta/visual-design-director.md` and require a schema-valid `visual_design_plan` before generating or authoring the final visual assets.
+
+- Do not invent the visual approach while writing Remotion/HyperFrames code.
+- Do not treat raw screenshots plus generic CSS chrome as finished art assets.
+- Build the scene's declared `art_assets` first: truthful source crops, SVG/vector systems, procedural graphics, diagrams, UI abstractions, masks/textures, editorial raster illustration, kinetic-type layouts, 3D or video material as specified.
+- Render the proof keyframes at delivery resolution and approve the complete keyframe board before final motion authoring.
+- If a scene's only strategy is `source_capture`, challenge whether crop, matte, mask, depth plate, vector annotation, UI abstraction, or another truthful editorial treatment is required to make it designed rather than merely displayed.
 
 ### Step 1: Inventory Required Assets
 
@@ -52,8 +63,10 @@ Asset Task:
 
 Also create tasks for:
 - **Narration audio** — one per script section (use `tts_selector` or a concrete TTS provider)
-- **Background music** — one track for the whole video (use `music_gen` or select from library)
-- **Sound effects** — per playbook's `sfx_style` (optional, use `music_gen` or stock)
+- **Semantic motion/source footage** — every scene whose approved motion class is `source_motion`, `generated_motion`, `character_motion`, or `ui_interaction`
+- **Reference frames/video** — required by the approved hero/bespoke reference strategy
+- **Background music** — one track for the whole video when approved
+- **Sound effects** — per playbook/taste profile where they reinforce a visual beat
 
 ### Step 2: Check Budget
 
@@ -62,8 +75,9 @@ Before generating anything:
 2. Compare against the cost tracker's remaining budget
 3. If over budget:
   - Switch expensive tools to cheaper alternatives (use `tts_selector` with `preferred_provider` to route to cheaper TTS; use `image_selector` to route to cheaper image providers)
-   - Reduce image count (combine similar scenes)
-   - Skip optional assets (SFX, B-roll)
+   - Reduce or redesign non-essential assets without breaking the visual beat contract
+   - Skip optional assets (SFX, decorative B-roll)
+   - Never replace required semantic motion with generated stills or stock cards without a new approved proposal decision
 4. Get cost approval via cost tracker before proceeding
 
 ### Step 2b: Sample Preview (Prevents Wasted Spend)
@@ -107,7 +121,7 @@ or ignores intended pauses, do not batch the remaining sections. Revise the
 
 Process asset tasks grouped by tool for efficiency:
 
-**Images (`image_selector`)**:
+**Images (`image_selector`)** — use only when the scene plan intentionally calls for a still/evidence plate or a still-derived treatment compatible with the approved quality tier. A generated still plus camera move is `camera_only`, not semantic motion:
 1. Build the prompt from the scene's actual purpose:
    - scene-specific shot/lighting/texture cues from `shot_language`, `shot_intent`, and `texture_keywords`
    - an adapted visual anchor from the playbook or custom identity
@@ -116,13 +130,22 @@ Process asset tasks grouped by tool for efficiency:
 2. Add negative prompt from playbook
 3. Include consistency anchors (same character/world/palette family), but do NOT reuse the exact same phrasing for every image
 4. Generate and verify the file exists
-5. If the result doesn't match expectations, refine the prompt and regenerate (max 2 retries)
+5. Record that any later pan/zoom over this still remains `camera_only` unless the edit creates a genuine information-bearing state change
+6. If the result doesn't match expectations, refine the prompt and regenerate (max 2 retries)
 
 **Diagrams (`diagram_gen`)**:
 1. Convert the scene description into valid Mermaid syntax
 2. Apply playbook's `asset_generation.diagram_style`
 3. Generate SVG/PNG
 4. Verify all nodes and edges are present
+5. For hero/overview work, treat Mermaid output as geometry/source material when necessary; refine composition, labels, hierarchy, masks and emphasis into the project-specific visual language before calling it final key art.
+
+**Custom SVG / vector / procedural art**:
+1. Start from the approved `visual_design_plan.art_assets`, not from decorative impulse.
+2. Hand-author project-local SVG/React-SVG/Canvas geometry when the scene needs exact paths, connectors, masks, iconography or diagram relationships.
+3. Keep text that must be exact in the runtime or deterministic SVG; do not ask an image model to spell it.
+4. Design the static proof frame first. Verify paths, optical spacing, scale hierarchy and negative space before adding animation.
+5. Record the asset path and provenance in the asset manifest when the file is materialized.
 
 **Code snippets (`code_snippet`)**:
 1. Extract language and code from the scene description
@@ -208,7 +231,7 @@ Assemble all generated assets into the manifest:
 ### Step 7: Verify All Assets
 
 **Existence check:**
-- [ ] Every asset `path` exists on disk
+- [ ] Every manifest asset `path` exists on disk; Atelier-owned project-local assets are inventoried/provenanced even when no stock asset manifest is needed by the renderer
 - [ ] Every narration section has a corresponding audio file
 - [ ] Every scene with `required_assets` has all assets generated
 - [ ] Background music file exists
@@ -217,8 +240,9 @@ Assemble all generated assets into the manifest:
 - [ ] Narration durations within ±15% of expected timing
 - [ ] Narration assets record `voice_performance.delivery_cues_applied`
 - [ ] Approved TTS sample uses the same provider, voice, and expressive settings as the batch
-- [ ] Images match the playbook's style (review consistency anchors)
-- [ ] Diagrams are legible and complete
+- [ ] Images match the approved taste profile/reference strategy and are not being used to silently replace required motion
+- [ ] Source/generated motion performs the action specified by the spoken visual beat
+- [ ] Diagrams are legible, complete, and planned for progressive semantic build rather than full-frame fade-in
 - [ ] Total cost within budget
 
 ### Step 8: Self-Evaluate
@@ -258,7 +282,7 @@ the AI model's training data — it may be wrong or outdated.
 - **Ignoring delivery cues**: Generating raw script text when `provider_text` or `delivery_cues` exist will flatten the read. Apply the voice-performance contract first.
 - **Missing pronunciation guide**: "PostgreSQL" or "Kubernetes" will be mispronounced without explicit guidance.
 - **One retry then give up**: If an image doesn't match, refine the prompt specifically — don't just retry the same prompt.
-- **AI-generating images with exact text (CTA, business names, contact info)**: AI image models frequently hallucinate wrong text — wrong business name, wrong phone number, misspelled words. **Never use AI image generation for scenes where text must be verbatim.** Use Remotion `text_card` type instead. This applies to: CTA screens, title cards with business names, contact info overlays, legal disclaimers. If a scene's `type` is `text_card` in the scene plan, do NOT generate an image for it — skip it and let the compose stage render it natively in Remotion.
+- **AI-generating images with exact text (CTA, business names, contact info)**: AI image models frequently hallucinate text. **Never use image generation where copy must be verbatim.** Render exact text in the approved runtime. In templated Remotion this may be a text component; in Atelier it is project-specific typography. Do not force a hero scene into `text_card` merely to solve exact copy.
 
 
 ## When You Do Not Know How
@@ -287,3 +311,7 @@ This stage gates on human approval (`human_approval_default: true`). After revie
 checkpoint with `status="awaiting_human"`, present the summary (the Backlot board renders
 the artifact), and **END YOUR TURN**. Do not start the next stage in the same response.
 Approval is per-gate — an earlier "go ahead" does not cover this gate.
+
+## Overview-Video category overlay
+
+For `overview-video`, inventory real product UI and source evidence before generating substitutes. Pass `pronunciation_guides` into the selected TTS provider, preserve display text separately, transcribe every brand-sensitive take, and record `pronunciation_verification_passed`. A wrong brand pronunciation is a blocking asset failure.

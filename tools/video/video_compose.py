@@ -7,8 +7,8 @@ at proposal stage.
 Routing is driven by `edit_decisions.render_runtime` (locked at proposal):
 
 - `remotion`   → React-based frame-accurate render via `npx remotion render`.
-                 Handles the existing scene-component stack, word-level captions,
-                 TalkingHead/CinematicRenderer. Current default.
+                 Supports either the templated scene-component stack or a
+                 project-local Atelier composition, as locked at proposal.
 - `hyperframes` → HTML/CSS/GSAP render via `hyperframes_compose`.
                  Handles kinetic typography, product promos, website-to-video,
                  registry blocks. Added in the parallel-runtime initiative.
@@ -36,6 +36,24 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any, Optional
+
+RENDERED_MOTION_THRESHOLD = 0.001
+
+
+def _rendered_motion_mask(differences: list[float]) -> list[bool]:
+    """Classify low-resolution frame deltas as visible editorial motion."""
+    return [difference >= RENDERED_MOTION_THRESHOLD for difference in differences]
+
+
+def _timeline_scene_id(
+    cut_windows: list[tuple[float, float, str]], timestamp: float
+) -> str | None:
+    """Return the scene owning a timestamp for cross-scene repetition QA."""
+    for start, end, cut_id in cut_windows:
+        if start <= timestamp < end:
+            return cut_id
+    return None
+
 
 from tools.base_tool import (
     BaseTool,
@@ -81,8 +99,9 @@ class VideoCompose(BaseTool):
                 "enum": ["compose", "render", "remotion_render", "burn_subtitles", "overlay", "encode"],
                 "description": (
                     "compose: low-level concat cuts + audio + subtitles. "
-                    "render: high-level — resolves asset IDs, auto-routes to Remotion "
-                    "for images/animations or FFmpeg for video-only. Preferred for compose-director. "
+                    "render: high-level governed render — preserves the runtime and "
+                    "composition mode locked at proposal, resolves assets/audio, runs "
+                    "pre-compose validation, renders, and executes blocking final QA. "
                     "remotion_render: render via Remotion (Node.js). "
                     "burn_subtitles: burn subtitle file into existing video. "
                     "overlay: composite overlays onto base video. "
@@ -105,23 +124,45 @@ class VideoCompose(BaseTool):
             "proposal_packet": {
                 "type": "object",
                 "description": (
-                    "Full proposal_packet artifact. Optional but STRONGLY "
-                    "recommended — when present, final_review compares "
-                    "proposal_packet.production_plan.render_runtime against "
-                    "edit_decisions.render_runtime and flags runtime_swap_detected. "
-                    "Without it, runtime-swap detection falls back to checking "
-                    "edit_decisions.metadata.proposal_render_runtime."
+                    "Full proposal_packet artifact. Required by the compose director "
+                    "for runtime, quality-tier, and delivery-promise preservation."
                 ),
+            },
+            "scene_plan": {
+                "type": "object",
+                "description": (
+                    "Full scene_plan artifact. Required for operation='render'; the "
+                    "pre-compose gate validates real visual beats instead of trying "
+                    "to reconstruct weak metadata from cuts."
+                ),
+            },
+            "visual_design_plan": {
+                "type": "object",
+                "description": (
+                    "Frame-first visual-design artifact created after scene planning and "
+                    "before motion composition. Required for hero/overview renders; it "
+                    "must prove every scene with approved keyframes and a keyframe board."
+                ),
+            },
+            "visual_design_root": {
+                "type": "string",
+                "description": "Workspace root used to resolve relative proof-keyframe and keyframe-board paths in visual_design_plan.",
             },
             "narration_transcript_path": {
                 "type": "string",
                 "description": (
-                    "Path to a word-level transcript JSON (from `transcriber` "
-                    "tool output). Optional but STRONGLY recommended: when "
-                    "combined with script_path/script_text, final_review "
-                    "runs transcript_comparison and catches TTS failures "
-                    "like 'Chirp3-HD reads ... as the word dot'. Without "
-                    "it, content-level audio bugs ship silently."
+                    "Optional fallback transcript JSON. Final review first attempts "
+                    "to transcribe the actual rendered output; this path is used only "
+                    "when rendered-output transcription is unavailable. Hero/broadcast "
+                    "delivery still requires the rendered-output transcript."
+                ),
+            },
+            "semantic_visual_review_path": {
+                "type": "string",
+                "description": (
+                    "Path to a rendered semantic visual_review artifact generated by "
+                    "visual_review_loop. Hero/overview delivery can require this in "
+                    "proposal_packet.production_plan.semantic_visual_review."
                 ),
             },
             "script_path": {
@@ -207,13 +248,14 @@ class VideoCompose(BaseTool):
 
     # Remotion scene types that trigger React-based rendering
     _REMOTION_COMPONENTS = [
-        "text_card", "stat_card", "callout", "comparison",
-        "progress", "chart", "bar_chart", "line_chart", "pie_chart", "kpi_grid",
+        "text_card", "hero_title", "stat_card", "callout", "comparison",
+        "progress_bar", "bar_chart", "line_chart", "pie_chart", "kpi_grid",
+        "anime_scene", "terminal_scene", "screenshot_scene",
     ]
 
     best_for = [
         "Final render for explainer and animation pipelines",
-        "Image-to-video with spring animations (Remotion)",
+        "Draft/standard image-to-video animatics with explicit camera-only classification (Remotion)",
         "Animated text cards, stat cards, charts (Remotion)",
         "Complex transitions between scenes (Remotion)",
         "Pure video concat and trim (FFmpeg)",
@@ -281,11 +323,10 @@ class VideoCompose(BaseTool):
         if remotion_ok:
             info["remotion_components"] = self._REMOTION_COMPONENTS
             info["remotion_note"] = (
-                "Remotion is available for React-based rendering. Use it for "
-                "image-to-video with spring animations, animated text/stat cards, "
-                "charts, callouts, comparisons, and word-level caption burn. "
-                "Prefer Remotion over Ken Burns pan-and-zoom for explainer "
-                "and motion-graphics pipelines that already use the scene-component stack."
+                "Remotion is available for React-based rendering. Proposal routing "
+                "decides between templated draft/standard composition and project-local "
+                "Atelier authoring. Stock cards/charts are not a hero-quality default; "
+                "their information must progressively change with the narration."
             )
         else:
             composer_dir = Path(__file__).resolve().parent.parent.parent / "remotion-composer"
@@ -467,10 +508,30 @@ class VideoCompose(BaseTool):
                     return ToolResult(success=False, error=f"Cut source not found: {source}")
 
                 seg_path = temp_dir / f"seg_{i:04d}.mp4"
-                in_s = cut["in_seconds"]
-                out_s = cut["out_seconds"]
-                duration = out_s - in_s
+                timeline_start = float(cut["in_seconds"])
+                timeline_end = float(cut["out_seconds"])
+                duration = timeline_end - timeline_start
+                source_in = float(cut.get("source_in_seconds", 0) or 0)
                 speed = cut.get("speed", 1.0)
+
+                if duration <= 0:
+                    return ToolResult(
+                        success=False,
+                        error=f"Cut {cut.get('id', i)!r} has non-positive timeline duration",
+                    )
+                if i > 0:
+                    previous_end = float(cuts[i - 1]["out_seconds"])
+                    if abs(timeline_start - previous_end) > 0.001:
+                        relation = "overlaps" if timeline_start < previous_end else "leaves a gap after"
+                        return ToolResult(
+                            success=False,
+                            error=(
+                                f"FFmpeg sequential compose {relation} cut "
+                                f"{cuts[i - 1].get('id', i - 1)!r}: previous end="
+                                f"{previous_end}, next start={timeline_start}. Use Remotion/"
+                                "HyperFrames for overlapping layers or explicitly fill timeline gaps."
+                            ),
+                        )
 
                 if self._is_image(source):
                     return ToolResult(
@@ -486,9 +547,10 @@ class VideoCompose(BaseTool):
                     # Video source: trim to segment.
                     #
                     # Semantics:
-                    #   -ss BEFORE -i   → fast input-level seek to in_s
-                    #   -t  AFTER  -i   → "play for `duration` seconds"
-                    #                     (unambiguous regardless of seek mode)
+                    #   timeline_start/end define placement in the final video.
+                    #   source_in_seconds defines the trim point inside source media.
+                    #   -ss BEFORE -i   → fast input-level seek to source_in
+                    #   -t  AFTER  -i   → play for `duration` seconds.
                     #
                     # We MUST re-encode here — `-c copy` cannot do frame-accurate
                     # cuts because it snaps to keyframes. With sparse GOPs (common
@@ -499,7 +561,7 @@ class VideoCompose(BaseTool):
                     # resolution out, so same-res inputs concat cleanly.
                     cmd = [
                         "ffmpeg", "-y",
-                        "-ss", str(in_s),
+                        "-ss", str(source_in),
                         "-t", str(duration),
                         "-i", str(source),
                     ]
@@ -558,7 +620,7 @@ class VideoCompose(BaseTool):
                         # before the output path and map streams explicitly.
                         cmd = [
                             "ffmpeg", "-y",
-                            "-ss", str(in_s),
+                            "-ss", str(source_in),
                             "-t", str(duration),
                             "-i", str(source),
                             "-f", "lavfi",
@@ -679,7 +741,9 @@ class VideoCompose(BaseTool):
                     pass
 
     _REMOTION_SCENE_TYPES = {
-        "text_card", "stat_card", "callout", "comparison", "progress", "chart",
+        "text_card", "hero_title", "stat_card", "callout", "comparison",
+        "progress_bar", "bar_chart", "line_chart", "pie_chart", "kpi_grid",
+        "anime_scene", "terminal_scene", "screenshot_scene",
     }
 
     # Maps renderer_family (set at proposal stage) to Remotion composition ID.
@@ -848,21 +912,50 @@ class VideoCompose(BaseTool):
         # art-direction declaration must exist. The distinctness review
         # ("could this be any other product's video?") stays human; what we
         # automate here is the *doctrine bypass*, not the taste call.
+        review_edit_decisions = json.loads(json.dumps(edit_decisions))
+        if not review_edit_decisions.get("cuts"):
+            scene_plan = inputs.get("scene_plan") or {}
+            scenes = scene_plan.get("scenes", []) if isinstance(scene_plan, dict) else scene_plan
+            review_edit_decisions["cuts"] = [
+                {
+                    "id": scene.get("id", f"scene-{index}"),
+                    "source": "",
+                    "type": scene.get("type", "animation"),
+                    "in_seconds": scene.get("start_seconds", 0),
+                    "out_seconds": scene.get("end_seconds", 0),
+                    "motion_class": scene.get("motion_class"),
+                    "primary_subject": scene.get("primary_subject"),
+                    "visual_state_before": scene.get("visual_state_before"),
+                    "visual_action": scene.get("visual_action"),
+                    "visual_state_after": scene.get("visual_state_after"),
+                    "semantic_purpose": scene.get("semantic_purpose"),
+                    "approved_hold_reason": scene.get("approved_hold_reason"),
+                }
+                for index, scene in enumerate(scenes)
+            ]
+
         final_review = self._run_final_review(
             output_path=output_path,
-            edit_decisions=edit_decisions,
+            edit_decisions=review_edit_decisions,
             proposal_packet=inputs.get("proposal_packet"),
             narration_transcript_path=inputs.get("narration_transcript_path"),
-            script_text=inputs.get("script_text"),
+            script_text=inputs.get("script_text") or self._read_text_file(
+                inputs.get("script_path")
+            ),
+            semantic_visual_review_path=inputs.get("semantic_visual_review_path"),
         )
 
         atelier_checks = self._run_atelier_checks(entry_path, bespoke)
         final_review.setdefault("checks", {})["atelier"] = atelier_checks
         final_review["issues_found"] = list(final_review.get("issues_found", [])) + atelier_checks.get("issues", [])
 
-        # Escalate atelier-critical issues (stock reuse) to the overall status.
-        # Missing art-direction is a warning, not a fail — it shows in issues_found.
-        if atelier_checks.get("stock_reuse_detected"):
+        # Atelier doctrine is executable: stock reuse, missing art direction, or
+        # repeated scene scaffolding blocks delivery instead of becoming a warning.
+        if (
+            atelier_checks.get("stock_reuse_detected")
+            or not atelier_checks.get("art_direction_declared")
+            or atelier_checks.get("scene_distinctness_failed")
+        ):
             final_review["status"] = "fail"
             final_review["recommended_action"] = "re_author"
 
@@ -877,7 +970,7 @@ class VideoCompose(BaseTool):
             "final_review_status": final_review.get("status"),
         }
 
-        if final_review.get("status") == "fail":
+        if final_review.get("status") != "pass":
             return ToolResult(
                 success=False,
                 error=(
@@ -987,9 +1080,9 @@ class VideoCompose(BaseTool):
           - stock_reuse_detected (bool) + offending_imports (list) — CRITICAL,
             fails the render. Catches `import X from "../../src/components/..."`
             and similar reuse of stock creative components.
-          - art_direction_declared (bool) + art_direction (str|None) — WARNING.
-            Forces step 1 of the bespoke-composition skill (commit to a fresh
-            art direction per video) to be written down rather than skipped.
+          - art_direction_declared (bool) + art_direction (str|None) — CRITICAL.
+          - scene_distinctness_failed (bool) — CRITICAL when inventory is missing,
+            primary subjects repeat, or the signature device is overused.
         """
         import re as _re
 
@@ -1025,11 +1118,40 @@ class VideoCompose(BaseTool):
         art_direction_declared = bool(art_direction and str(art_direction).strip())
         if not art_direction_declared:
             issues.append(
-                "atelier warning: no bespoke.art_direction declared. Per "
+                "atelier doctrine violation: no bespoke.art_direction declared. Per "
                 "skills/meta/bespoke-composition.md step 1, every atelier piece must "
                 "commit to a fresh art direction (palette, type, motion, signature "
-                "device) before authoring. Pass edit_decisions.bespoke.art_direction "
-                "as a short note or a path to art-direction.md."
+                "device) before authoring."
+            )
+
+        inventory = bespoke.get("scene_inventory") or []
+        normalized_subjects = [
+            str(item.get("primary_subject", "")).strip().lower()
+            for item in inventory
+            if str(item.get("primary_subject", "")).strip()
+        ]
+        duplicate_subjects = sorted({
+            subject for subject in normalized_subjects
+            if normalized_subjects.count(subject) > 1
+        })
+        signature_count = sum(
+            1 for item in inventory if item.get("signature_device_present") is True
+        )
+        scene_distinctness_failed = bool(duplicate_subjects or signature_count > 2 or not inventory)
+        if not inventory:
+            issues.append(
+                "atelier doctrine violation: bespoke.scene_inventory is missing. "
+                "Record each scene's primary subject and signature-device usage before render."
+            )
+        if duplicate_subjects:
+            issues.append(
+                "atelier scene distinctness violation: repeated primary subjects: "
+                + ", ".join(duplicate_subjects)
+            )
+        if signature_count > 2:
+            issues.append(
+                f"atelier signature device appears in {signature_count} scenes; maximum is 2. "
+                "It may not become the visual scaffolding of the whole film."
             )
 
         return {
@@ -1037,6 +1159,10 @@ class VideoCompose(BaseTool):
             "offending_imports": offending,
             "art_direction_declared": art_direction_declared,
             "art_direction": str(art_direction) if art_direction else None,
+            "scene_inventory_count": len(inventory),
+            "duplicate_primary_subjects": duplicate_subjects,
+            "signature_device_scene_count": signature_count,
+            "scene_distinctness_failed": scene_distinctness_failed,
             "issues": issues,
         }
 
@@ -1150,22 +1276,19 @@ class VideoCompose(BaseTool):
     def _needs_remotion(self, cuts: list[dict]) -> bool:
         """Determine whether Remotion should handle this composition.
 
-        Remotion is the DEFAULT composition engine when available.  It handles
-        video clips (via <OffthreadVideo>), still images, animated scene types,
-        component types, transitions, and mixed content — all in a single
-        React-based render pass.
+        This helper is reached only after `render_runtime="remotion"` was locked
+        at proposal. It decides whether the selected Remotion path is available;
+        it does not choose Remotion over another approved runtime.
 
-        Returns False (i.e. use FFmpeg) only when Remotion is not
-        available. For `operation="render"` the governance default is
-        Remotion-first: the renderer family was chosen earlier, and the
-        tool should preserve that decision instead of silently
-        downgrading to FFmpeg.
+        Returns False only when Remotion is unavailable, which is handled as a
+        blocker by the governed render path rather than a silent creative swap.
 
         This "Remotion-first" policy means mixed content (video clips +
         animated stills + text cards) is always composed in Remotion, which
         can embed <OffthreadVideo> alongside React components natively.
         """
-        # If Remotion isn't installed, fall back to FFmpeg
+        # This helper reports availability only. Governed render never uses a
+        # False result to select another runtime automatically.
         if not self._remotion_available():
             return False
 
@@ -1191,14 +1314,16 @@ class VideoCompose(BaseTool):
         self,
         edit_decisions: dict[str, Any],
         resolved_cuts: list[dict],
-        scene_plan: list[dict] | None = None,
+        scene_plan: list[dict] | dict[str, Any] | None = None,
+        script_text: str | None = None,
+        visual_design_plan: dict[str, Any] | None = None,
+        visual_design_root: str | None = None,
     ) -> ToolResult | None:
         """Pre-compose quality gate — blocks render on critical violations.
 
-        Checks:
-        1. Delivery promise violation: motion-required brief with >70% still cuts → BLOCK
-        2. Slideshow risk score "fail" (average ≥ 4.0) → BLOCK
-        3. Missing renderer_family → WARN (log only, don't block)
+        Checks include delivery-promise preservation, slideshow risk, renderer
+        contract completeness, caption-safe layout, and viewer-facing text quality.
+        Subtitle occlusion and German ASCII transliterations are blocking failures.
 
         Returns a failed ToolResult if render should be blocked, None if OK to proceed.
         """
@@ -1227,9 +1352,74 @@ class VideoCompose(BaseTool):
 
         # --- 2. Slideshow risk check ---
         renderer_family = edit_decisions.get("renderer_family")
-        scenes = scene_plan or []
+        scene_plan_data = scene_plan if isinstance(scene_plan, dict) else {}
+        scenes = (
+            scene_plan_data.get("scenes", [])
+            if scene_plan_data
+            else (scene_plan or [])
+        )
+        quality_tier = (
+            scene_plan_data.get("quality_tier")
+            or (edit_decisions.get("metadata") or {}).get("quality_tier")
+            or "standard"
+        )
+        edit_video_category = str(edit_decisions.get("video_category") or "").strip()
+        scene_video_category = str(scene_plan_data.get("video_category") or "").strip()
+        video_category = edit_video_category or scene_video_category
+        if edit_video_category and scene_video_category and edit_video_category != scene_video_category:
+            blocks.append(
+                f"video_category changed from scene plan {scene_video_category!r} "
+                f"to EDL {edit_video_category!r}"
+            )
+        if video_category and video_category != "overview-video":
+            blocks.append(f"Unsupported active video_category {video_category!r}")
 
-        # If no scene_plan passed, try to extract scene info from cuts
+        # --- 2a. Premium frame-first contract (hero / overview) ---
+        try:
+            from lib.premium_visual_contract import validate_premium_scene_plan
+            premium = validate_premium_scene_plan(
+                scene_plan_data if scene_plan_data else scenes,
+                quality_tier=str(quality_tier),
+                video_category=video_category,
+            )
+            if premium.get("active"):
+                blocks.extend(
+                    f"Premium visual contract violation: {issue}"
+                    for issue in premium.get("violations", [])
+                )
+                warnings.extend(
+                    f"Premium visual contract: {issue}"
+                    for issue in premium.get("warnings", [])
+                )
+        except Exception as e:
+            log.warning("Could not validate premium visual contract: %s", e)
+
+        # --- 2b. Visual-design-before-motion gate (hero / overview) ---
+        try:
+            from lib.visual_design_contract import validate_visual_design_plan
+            visual_design = validate_visual_design_plan(
+                visual_design_plan,
+                scene_plan_data if scene_plan_data else scenes,
+                quality_tier=str(quality_tier),
+                video_category=video_category,
+                require_files=True,
+                base_path=visual_design_root,
+            )
+            if visual_design.get("active"):
+                blocks.extend(
+                    f"Visual design contract violation: {issue}"
+                    for issue in visual_design.get("violations", [])
+                )
+                warnings.extend(
+                    f"Visual design contract: {issue}"
+                    for issue in visual_design.get("warnings", [])
+                )
+        except Exception as e:
+            log.warning("Could not validate visual design contract: %s", e)
+
+        # Legacy/internal callers may still omit scene_plan, but operation='render'
+        # rejects that before reaching this gate. Keep reconstruction only for direct
+        # unit-level calls to this method.
         if not scenes and resolved_cuts:
             scenes = [
                 {
@@ -1251,15 +1441,37 @@ class VideoCompose(BaseTool):
                 risk = score_slideshow_risk(
                     scenes, edit_decisions, renderer_family, render_runtime
                 )
+                quality_floor = (
+                    (delivery_data or {}).get("quality_floor")
+                    or "presentable"
+                )
+                composition_mode = edit_decisions.get("composition_mode", "templated")
+                hero_gate = (
+                    quality_tier == "hero"
+                    or composition_mode == "atelier"
+                    or quality_floor == "broadcast"
+                )
                 if risk["verdict"] == "fail":
                     blocks.append(
                         f"Slideshow risk score {risk['average']:.1f}/5.0 (verdict: fail). "
-                        f"Video plan looks like a slideshow — revise scene plan before rendering."
+                        "Video plan looks like a slideshow — revise scene plan before rendering."
                     )
                 elif risk["verdict"] == "revise":
-                    warnings.append(
-                        f"Slideshow risk score {risk['average']:.1f}/5.0 (verdict: revise). "
-                        f"Consider improving scene variety before final render."
+                    if quality_floor != "draft" or hero_gate:
+                        blocks.append(
+                            f"Slideshow risk score {risk['average']:.1f}/5.0 (verdict: revise) "
+                            f"is blocking for quality_tier={quality_tier}, "
+                            f"quality_floor={quality_floor}, composition_mode={composition_mode}."
+                        )
+                    else:
+                        warnings.append(
+                            f"Draft/animatic slideshow risk is {risk['average']:.1f}/5.0 "
+                            "(revise); final rendering remains blocked until improved."
+                        )
+                elif hero_gate and risk["average"] >= 2.0:
+                    blocks.append(
+                        f"Hero/atelier slideshow risk {risk['average']:.1f}/5.0 exceeds "
+                        "the maximum allowed 2.0. Increase semantic motion and scene variety."
                     )
             except Exception as e:
                 log.warning("Could not compute slideshow risk: %s", e)
@@ -1271,6 +1483,184 @@ class VideoCompose(BaseTool):
                 "renderer_family must be set at proposal stage and locked before compose. "
                 "Re-run the proposal stage with a renderer_family selection."
             )
+
+        # --- 4. Caption-safe layout contract ---------------------------------
+        subtitles = edit_decisions.get("subtitles") or {}
+        subtitles_enabled = bool(subtitles.get("enabled"))
+        if subtitles_enabled:
+            required_caption_fields = (
+                "language_code",
+                "unicode_normalization",
+                "layout_policy",
+                "preferred_zone",
+                "safe_margin_px",
+                "protected_regions",
+                "visual_treatment",
+                "full_width_background",
+            )
+            missing_caption_fields = [
+                field for field in required_caption_fields
+                if subtitles.get(field) in (None, "")
+            ]
+            if missing_caption_fields:
+                blocks.append(
+                    "Subtitle layout contract is incomplete: missing "
+                    + ", ".join(missing_caption_fields)
+                )
+
+            layout_policy = subtitles.get("layout_policy")
+            preferred_zone = subtitles.get("preferred_zone")
+            global_regions = subtitles.get("protected_regions") or []
+            if layout_policy not in {"reserved-rail", "adaptive-regions"}:
+                blocks.append(
+                    "subtitles.layout_policy must be 'reserved-rail' or "
+                    "'adaptive-regions'"
+                )
+            if preferred_zone not in {"top", "bottom"}:
+                blocks.append("subtitles.preferred_zone must be 'top' or 'bottom'")
+            if subtitles.get("unicode_normalization") != "NFC":
+                blocks.append("subtitles.unicode_normalization must be 'NFC'")
+            if not global_regions:
+                blocks.append(
+                    "subtitles.protected_regions must declare every time-coded visual "
+                    "area captions may never cover"
+                )
+
+            rail_ratio = subtitles.get("reserved_rail_height_ratio")
+            if layout_policy == "reserved-rail":
+                if rail_ratio is None and subtitles.get("reserved_rail_height_px") is None:
+                    blocks.append(
+                        "reserved-rail subtitles require reserved_rail_height_ratio "
+                        "or reserved_rail_height_px"
+                    )
+                if rail_ratio is not None and not 0.10 <= float(rail_ratio) <= 0.30:
+                    blocks.append(
+                        "subtitles.reserved_rail_height_ratio must be between 0.10 and 0.30"
+                    )
+
+            if video_category == "overview-video":
+                if not subtitles_enabled:
+                    blocks.append("Overview-Video requires enabled subtitles")
+                if subtitles.get("visual_treatment") != "integrated-field":
+                    blocks.append(
+                        "Overview-Video captions require visual_treatment='integrated-field'"
+                    )
+                if subtitles.get("full_width_background") is not False:
+                    blocks.append(
+                        "Overview-Video captions forbid a full-width caption background; "
+                        "set full_width_background=false"
+                    )
+                opacity = subtitles.get("background_opacity")
+                if opacity is not None and float(opacity) > 0.18:
+                    blocks.append(
+                        "Overview-Video integrated caption backing opacity may not exceed 0.18"
+                    )
+
+            for scene in scenes:
+                scene_id = str(scene.get("id", "unknown-scene"))
+                scene_regions = scene.get("protected_regions") or []
+                caption_layout = scene.get("caption_layout") or {}
+                if not scene_regions:
+                    blocks.append(
+                        f"Scene {scene_id!r} has no protected_regions; caption occlusion "
+                        "cannot be proven safe"
+                    )
+                    continue
+                if caption_layout.get("preferred_zone") not in {"top", "bottom"}:
+                    blocks.append(
+                        f"Scene {scene_id!r} has no valid caption_layout.preferred_zone"
+                    )
+                for region in scene_regions:
+                    try:
+                        x = float(region["x"])
+                        y = float(region["y"])
+                        width = float(region["width"])
+                        height = float(region["height"])
+                    except (KeyError, TypeError, ValueError):
+                        blocks.append(
+                            f"Scene {scene_id!r} contains an invalid protected region"
+                        )
+                        continue
+                    if (
+                        x < 0 or y < 0 or width <= 0 or height <= 0
+                        or x + width > 1.0001 or y + height > 1.0001
+                    ):
+                        blocks.append(
+                            f"Scene {scene_id!r} protected region "
+                            f"{region.get('id', '<unnamed>')!r} exceeds normalized frame bounds"
+                        )
+                    if layout_policy == "reserved-rail" and rail_ratio is not None:
+                        ratio = float(rail_ratio)
+                        intersects_rail = (
+                            preferred_zone == "bottom" and y + height > 1 - ratio + 1e-6
+                        ) or (
+                            preferred_zone == "top" and y < ratio - 1e-6
+                        )
+                        if intersects_rail:
+                            blocks.append(
+                                f"Scene {scene_id!r} protected region "
+                                f"{region.get('id', '<unnamed>')!r} intersects the "
+                                f"reserved {preferred_zone} caption rail"
+                            )
+
+        # --- 5. Unicode and German display-text quality -----------------------
+        language_code = str(
+            (edit_decisions.get("subtitles") or {}).get("language_code")
+            or (edit_decisions.get("metadata") or {}).get("language_code")
+            or ""
+        )
+        if language_code or script_text:
+            try:
+                from lib.text_quality import iter_string_values, validate_display_text
+
+                text_sources: list[tuple[str, str]] = []
+                if script_text:
+                    text_sources.append(("approved script", script_text))
+                if scene_plan:
+                    text_sources.extend(
+                        ("scene plan", value) for value in iter_string_values(scene_plan)
+                    )
+                text_sources.extend(
+                    ("captions", value)
+                    for value in iter_string_values(edit_decisions.get("captions") or [])
+                )
+
+                subtitle_source = subtitles.get("source") if subtitles_enabled else None
+                if subtitle_source:
+                    subtitle_path = Path(str(subtitle_source))
+                    if subtitle_path.exists():
+                        text_sources.append(
+                            (f"subtitle source {subtitle_path}", subtitle_path.read_text(encoding="utf-8"))
+                        )
+
+                bespoke_entry = (edit_decisions.get("bespoke") or {}).get("entry")
+                if bespoke_entry:
+                    entry_path = Path(str(bespoke_entry))
+                    if entry_path.exists():
+                        text_sources.append(
+                            (f"Atelier entry {entry_path}", entry_path.read_text(encoding="utf-8"))
+                        )
+
+                seen_text_issues: set[tuple[str, str, str]] = set()
+                for source_name, text in text_sources:
+                    for issue in validate_display_text(
+                        text, language_code=language_code or None
+                    ):
+                        key = (source_name, issue.token, issue.replacement)
+                        if key in seen_text_issues:
+                            continue
+                        seen_text_issues.add(key)
+                        if issue.rule == "unicode_not_nfc":
+                            blocks.append(
+                                f"{source_name} is not Unicode NFC normalized"
+                            )
+                        else:
+                            blocks.append(
+                                f"German display text in {source_name} uses ASCII "
+                                f"substitution {issue.token!r}; write {issue.replacement!r}"
+                            )
+            except Exception as exc:
+                blocks.append(f"Display-text quality validation failed: {exc}")
 
         # Log warnings
         for w in warnings:
@@ -1290,21 +1680,15 @@ class VideoCompose(BaseTool):
         return None
 
     def _render(self, inputs: dict[str, Any]) -> ToolResult:
-        """High-level render: assemble edit decisions + asset manifest into final video.
+        """Governed final render using the runtime and authoring mode approved at proposal.
 
-        This is the primary entry point for the compose-director skill.
-        It resolves asset IDs and routes to the composition engine:
+        The caller passes proposal_packet, approved script, complete scene_plan,
+        edit_decisions, and any applicable asset manifest. The method validates
+        contract preservation, resolves assets/audio, executes the selected runtime,
+        and returns success only after measured final_review status is ``pass``.
 
-        - **Remotion (default):** Used for all compositions when available —
-          video clips, images, animated scenes, component types, mixed content.
-          Remotion embeds video via <OffthreadVideo> and handles transitions,
-          overlays, and profile scaling natively.
-        - **FFmpeg (fallback):** Used only when Remotion is unavailable, or
-          when the agent explicitly calls operation='compose' for simple
-          trim/concat operations.
-
-        The agent should pass edit_decisions, asset_manifest, and optionally
-        profile, subtitle_path, audio_path, and options.
+        There is no default runtime and no automatic fallback. Remotion,
+        HyperFrames, and FFmpeg each run only when explicitly approved.
         """
         edit_decisions = inputs.get("edit_decisions")
         asset_manifest = inputs.get("asset_manifest")
@@ -1341,6 +1725,138 @@ class VideoCompose(BaseTool):
                 ),
             )
 
+        proposal_packet = inputs.get("proposal_packet")
+        if not proposal_packet:
+            return ToolResult(
+                success=False,
+                error=(
+                    "proposal_packet is required for operation='render'. The compose "
+                    "gate must verify the approved runtime, quality floor, delivery "
+                    "promise, and composition mode; silent reconstruction is forbidden."
+                ),
+            )
+
+        scene_plan = inputs.get("scene_plan")
+        if not scene_plan or not (
+            scene_plan.get("scenes") if isinstance(scene_plan, dict) else scene_plan
+        ):
+            return ToolResult(
+                success=False,
+                error=(
+                    "scene_plan is required for operation='render' and must contain "
+                    "scenes. Pre-compose validation evaluates the approved visual beat "
+                    "map; it may not infer quality metadata from cuts."
+                ),
+            )
+
+        approved_script_text = inputs.get("script_text") or self._read_text_file(
+            inputs.get("script_path")
+        )
+        production_plan = proposal_packet.get("production_plan", {})
+        proposal_delivery = production_plan.get("delivery_promise") or {}
+        scene_plan_data = scene_plan if isinstance(scene_plan, dict) else {}
+
+        contract_mismatches: list[str] = []
+        proposal_runtime = str(production_plan.get("render_runtime", "")).strip().lower()
+        proposal_mode = str(production_plan.get("composition_mode", "")).strip().lower()
+        proposal_family = str(production_plan.get("renderer_family", "")).strip()
+        proposal_quality = str(production_plan.get("quality_tier", "")).strip().lower()
+        proposal_delivery_kind = str(production_plan.get("delivery_kind", "")).strip().lower()
+        proposal_motion = str(production_plan.get("motion_expectation", "")).strip().lower()
+        proposal_category = str(production_plan.get("video_category", "")).strip().lower()
+        scene_category = str(scene_plan_data.get("video_category", "")).strip().lower()
+        edit_category = str(edit_decisions.get("video_category", "")).strip().lower()
+
+        if not proposal_runtime:
+            contract_mismatches.append("proposal_packet.production_plan.render_runtime is missing")
+        elif proposal_runtime != render_runtime:
+            contract_mismatches.append(
+                f"render_runtime changed from proposal {proposal_runtime!r} to EDL {render_runtime!r}"
+            )
+        if not proposal_mode:
+            contract_mismatches.append("proposal_packet.production_plan.composition_mode is missing")
+        elif proposal_mode != str(edit_decisions.get("composition_mode", "")).strip().lower():
+            contract_mismatches.append(
+                "composition_mode changed from proposal "
+                f"{proposal_mode!r} to EDL {edit_decisions.get('composition_mode')!r}"
+            )
+        if not proposal_family:
+            contract_mismatches.append("proposal_packet.production_plan.renderer_family is missing")
+        elif proposal_family != str(edit_decisions.get("renderer_family", "")).strip():
+            contract_mismatches.append(
+                f"renderer_family changed from proposal {proposal_family!r} to "
+                f"EDL {edit_decisions.get('renderer_family')!r}"
+            )
+
+        for key, proposal_value in (
+            ("quality_tier", proposal_quality),
+            ("delivery_kind", proposal_delivery_kind),
+            ("motion_expectation", proposal_motion),
+        ):
+            scene_value = str(scene_plan_data.get(key, "")).strip().lower()
+            if not proposal_value:
+                contract_mismatches.append(f"proposal_packet.production_plan.{key} is missing")
+            elif not scene_value:
+                contract_mismatches.append(f"scene_plan.{key} is missing")
+            elif proposal_value != scene_value:
+                contract_mismatches.append(
+                    f"{key} changed from proposal {proposal_value!r} to scene_plan {scene_value!r}"
+                )
+
+        if proposal_category:
+            if proposal_category != "overview-video":
+                contract_mismatches.append(
+                    f"video_category {proposal_category!r} is not active"
+                )
+            if not scene_category:
+                contract_mismatches.append("scene_plan.video_category is missing")
+            elif scene_category != proposal_category:
+                contract_mismatches.append(
+                    f"video_category changed from proposal {proposal_category!r} "
+                    f"to scene_plan {scene_category!r}"
+                )
+            if not edit_category:
+                contract_mismatches.append("edit_decisions.video_category is missing")
+            elif edit_category != proposal_category:
+                contract_mismatches.append(
+                    f"video_category changed from proposal {proposal_category!r} "
+                    f"to EDL {edit_category!r}"
+                )
+
+        if proposal_quality == "hero":
+            if proposal_delivery_kind != "bespoke":
+                contract_mismatches.append("hero quality requires delivery_kind='bespoke'")
+            if proposal_mode != "atelier":
+                contract_mismatches.append("hero quality requires composition_mode='atelier'")
+            if not production_plan.get("art_direction"):
+                contract_mismatches.append("hero quality requires production_plan.art_direction")
+
+        if contract_mismatches:
+            return ToolResult(
+                success=False,
+                error=(
+                    "Approved production contract mismatch — render blocked.\n"
+                    + "\n".join(f"  • {item}" for item in contract_mismatches)
+                ),
+                data={"contract_mismatches": contract_mismatches},
+            )
+
+        if (
+            proposal_quality == "hero"
+            or proposal_delivery.get("quality_floor") == "broadcast"
+        ) and not approved_script_text:
+            return ToolResult(
+                success=False,
+                error=(
+                    "Hero/broadcast render requires script_text or a readable script_path. "
+                    "Final QA must transcribe the rendered output and compare it to the "
+                    "approved script."
+                ),
+            )
+        if approved_script_text and not inputs.get("script_text"):
+            inputs = dict(inputs)
+            inputs["script_text"] = approved_script_text
+
         # --- Atelier (bespoke) mode -------------------------------------
         # Hand-authored, project-local Remotion composition. Deliberately
         # bypasses the cut-schema, the stock scene-type registry, and the
@@ -1354,20 +1870,54 @@ class VideoCompose(BaseTool):
             or edit_decisions.get("renderer_family") == "bespoke"
         )
         if render_runtime == "remotion" and remotion_atelier_requested:
+            atelier_scenes = (
+                scene_plan.get("scenes", [])
+                if isinstance(scene_plan, dict)
+                else scene_plan
+            )
+            synthetic_cuts = [
+                {
+                    "id": s.get("id", f"scene-{i}"),
+                    "source": "",
+                    "type": s.get("type", "animation"),
+                    "in_seconds": s.get("start_seconds", 0),
+                    "out_seconds": s.get("end_seconds", 0),
+                    "motion_class": s.get("motion_class"),
+                    "visual_state_before": s.get("visual_state_before"),
+                    "visual_action": s.get("visual_action"),
+                    "visual_state_after": s.get("visual_state_after"),
+                    "semantic_purpose": s.get("semantic_purpose"),
+                }
+                for i, s in enumerate(atelier_scenes)
+            ]
+            validation_block = self._pre_compose_validation(
+                edit_decisions,
+                synthetic_cuts,
+                scene_plan,
+                approved_script_text,
+                inputs.get("visual_design_plan"),
+                inputs.get("visual_design_root"),
+            )
+            if validation_block is not None:
+                return validation_block
             return self._render_via_atelier(inputs, edit_decisions)
 
-        if not asset_manifest:
-            return ToolResult(success=False, error="asset_manifest required for render")
+        composition_mode = str(edit_decisions.get("composition_mode", "templated")).lower()
+        if not asset_manifest and composition_mode != "atelier":
+            return ToolResult(success=False, error="asset_manifest required for templated render")
 
         output_path = Path(inputs.get("output_path", "renders/output.mp4"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build asset lookup: id -> asset info
-        asset_lookup = {a["id"]: a for a in asset_manifest.get("assets", [])}
+        # Atelier compositions may own project-local assets. Templated work resolves
+        # all manifest IDs before invoking the selected runtime.
+        asset_lookup = {
+            a["id"]: a for a in (asset_manifest or {}).get("assets", [])
+        }
 
         cuts = edit_decisions.get("cuts", [])
-        if not cuts:
-            return ToolResult(success=False, error="No cuts in edit_decisions")
+        if not cuts and composition_mode != "atelier":
+            return ToolResult(success=False, error="No cuts in templated edit_decisions")
 
         # Resolve asset IDs in cuts to file paths
         resolved_cuts = []
@@ -1378,9 +1928,47 @@ class VideoCompose(BaseTool):
                 resolved_cut["source"] = asset_lookup[source_id]["path"]
             resolved_cuts.append(resolved_cut)
 
+        # Resolve audio asset IDs and normalize the schema aliases consumed by
+        # Remotion. The EDL remains provider-neutral; the render props contain paths.
+        resolved_edit_decisions = json.loads(json.dumps(edit_decisions))
+        resolved_edit_decisions["cuts"] = resolved_cuts
+        audio = resolved_edit_decisions.setdefault("audio", {})
+        if resolved_edit_decisions.get("music") and not audio.get("music"):
+            audio["music"] = resolved_edit_decisions["music"]
+
+        def _resolve_audio_ref(layer: dict[str, Any]) -> None:
+            asset_id = layer.get("asset_id")
+            if asset_id in asset_lookup and not layer.get("src"):
+                layer["src"] = asset_lookup[asset_id]["path"]
+            if "fade_in_seconds" in layer and "fadeInSeconds" not in layer:
+                layer["fadeInSeconds"] = layer["fade_in_seconds"]
+            if "fade_out_seconds" in layer and "fadeOutSeconds" not in layer:
+                layer["fadeOutSeconds"] = layer["fade_out_seconds"]
+
+        narration = audio.get("narration") or {}
+        if isinstance(narration, dict):
+            _resolve_audio_ref(narration)
+            for segment in narration.get("segments", []) or []:
+                if isinstance(segment, dict):
+                    _resolve_audio_ref(segment)
+        music = audio.get("music") or {}
+        if isinstance(music, dict):
+            _resolve_audio_ref(music)
+        for sfx in audio.get("sfx", []) or []:
+            if isinstance(sfx, dict):
+                _resolve_audio_ref(sfx)
+
+        edit_decisions = resolved_edit_decisions
+
         # --- Pre-compose validation gate ---
-        scene_plan = inputs.get("scene_plan")
-        validation_block = self._pre_compose_validation(edit_decisions, resolved_cuts, scene_plan)
+        validation_block = self._pre_compose_validation(
+            edit_decisions,
+            resolved_cuts,
+            scene_plan,
+            approved_script_text,
+            inputs.get("visual_design_plan"),
+            inputs.get("visual_design_root"),
+        )
         if validation_block is not None:
             return validation_block
 
@@ -1406,59 +1994,53 @@ class VideoCompose(BaseTool):
                 profile=profile,
             )
         # --- Explicit Remotion path (render_runtime == 'remotion') ---
-        if self._needs_remotion(resolved_cuts):
-            remotion_inputs: dict[str, Any] = {
-                "edit_decisions": dict(edit_decisions, cuts=resolved_cuts),
-                "output_path": str(output_path),
-            }
-            if profile:
-                remotion_inputs["profile"] = profile
-            # Forward the creator-facing render timeout through the high-level
-            # render path (execute(operation="render") -> _render), otherwise it
-            # would only take effect on a direct _remotion_render() call.
-            if inputs.get("remotion_timeout_ms") is not None:
-                remotion_inputs["remotion_timeout_ms"] = inputs["remotion_timeout_ms"]
-            render_result = self._remotion_render(remotion_inputs)
+        # Content simplicity never authorizes a runtime swap. A governed Remotion
+        # final either renders in Remotion or returns a blocker.
+        if not self._remotion_available():
+            return ToolResult(
+                success=False,
+                error=(
+                    "render_runtime='remotion' was locked at proposal, but Remotion "
+                    "is unavailable. Automatic fallback to FFmpeg is forbidden. "
+                    "Install/fix Remotion or obtain approval for a new proposal decision."
+                ),
+                data={
+                    "runtime_selection": {
+                        "requested": "remotion",
+                        "actual": None,
+                        "fallback_blocked": True,
+                    }
+                },
+            )
 
-            # Governance: NEVER silently fall back to FFmpeg when Remotion fails.
-            # The agent must decide the fallback path, not the tool.
-            if not render_result.success:
-                renderer_family = edit_decisions.get("renderer_family", "unknown")
-                return ToolResult(
-                    success=False,
-                    error=(
-                        f"Remotion render failed for renderer_family={renderer_family!r}. "
-                        f"Underlying error: {render_result.error}\n\n"
-                        f"This composition requires Remotion (images, text cards, animations). "
-                        f"Options:\n"
-                        f"  1. Fix Remotion setup (cd remotion-composer && npm install)\n"
-                        f"  2. Re-run with operation='compose' for FFmpeg-only (video cuts only)\n"
-                        f"  3. Approve a degraded FFmpeg render (still images → Ken Burns)\n\n"
-                        f"Per governance: renderer downgrade requires user approval."
-                    ),
-                )
-        else:
-            # --- FFmpeg fallback: only when Remotion is unavailable ---
-            options = inputs.get("options", {})
-            subtitle_burn = options.get("subtitle_burn", True)
+        remotion_inputs: dict[str, Any] = {
+            "edit_decisions": dict(edit_decisions, cuts=resolved_cuts),
+            "output_path": str(output_path),
+        }
+        if profile:
+            remotion_inputs["profile"] = profile
+        if inputs.get("remotion_timeout_ms") is not None:
+            remotion_inputs["remotion_timeout_ms"] = inputs["remotion_timeout_ms"]
+        render_result = self._remotion_render(remotion_inputs)
 
-            # Resolve subtitle_path from edit_decisions if not provided
-            subtitle_path = inputs.get("subtitle_path")
-            if subtitle_burn and not subtitle_path:
-                ed_subs = edit_decisions.get("subtitles", {})
-                if ed_subs.get("enabled") and ed_subs.get("source"):
-                    subtitle_path = ed_subs["source"]
-
-            # Build compose inputs
-            compose_inputs = dict(inputs)
-            compose_inputs["edit_decisions"] = dict(edit_decisions, cuts=resolved_cuts)
-            compose_inputs["output_path"] = str(output_path)
-            if subtitle_path:
-                compose_inputs["subtitle_path"] = subtitle_path
-            if profile:
-                compose_inputs["profile"] = profile
-
-            render_result = self._compose(compose_inputs)
+        if not render_result.success:
+            renderer_family = edit_decisions.get("renderer_family", "unknown")
+            return ToolResult(
+                success=False,
+                error=(
+                    f"Remotion render failed for renderer_family={renderer_family!r}. "
+                    f"Underlying error: {render_result.error}. The approved runtime "
+                    "may not be replaced automatically; fix Remotion or obtain approval "
+                    "for a new proposal/runtime decision."
+                ),
+                data={
+                    "runtime_selection": {
+                        "requested": "remotion",
+                        "actual": None,
+                        "fallback_blocked": True,
+                    }
+                },
+            )
 
         # --- Post-render: mandatory final self-review ---
         if render_result.success and output_path.exists():
@@ -1470,6 +2052,7 @@ class VideoCompose(BaseTool):
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
                 ),
+                semantic_visual_review_path=inputs.get("semantic_visual_review_path"),
             )
 
             # Attach final_review to the ToolResult data so the compose-director
@@ -1479,18 +2062,90 @@ class VideoCompose(BaseTool):
             render_result.data["final_review"] = final_review
             render_result.data["final_review_status"] = final_review["status"]
 
-            # If the self-review says fail, downgrade the ToolResult
-            if final_review["status"] == "fail":
+            # Final delivery is allowed only on an explicit pass. `revise` means
+            # the output exists but must be corrected and rendered again.
+            if final_review["status"] != "pass":
                 return ToolResult(
                     success=False,
                     error=(
-                        "Post-render self-review FAILED. The output is not presentable.\n"
+                        f"Post-render self-review BLOCKED delivery ({final_review['status']}).\n"
                         + "\n".join(f"  • {i}" for i in final_review.get("issues_found", []))
                     ),
                     data=render_result.data,
                 )
 
         return render_result
+
+    @staticmethod
+    def _validate_bespoke_scene_inventory(
+        bespoke: dict[str, Any],
+        *,
+        runtime: str,
+        workspace_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Validate runtime-neutral Atelier doctrine before and after render."""
+        issues: list[str] = []
+        art_direction = bespoke.get("art_direction") or bespoke.get("art_direction_note")
+        art_direction_declared = bool(art_direction and str(art_direction).strip())
+        if not art_direction_declared:
+            issues.append(
+                f"{runtime} Atelier doctrine violation: bespoke.art_direction is missing"
+            )
+
+        inventory = bespoke.get("scene_inventory") or []
+        normalized_subjects = [
+            str(item.get("primary_subject", "")).strip().lower()
+            for item in inventory
+            if str(item.get("primary_subject", "")).strip()
+        ]
+        duplicate_subjects = sorted({
+            subject for subject in normalized_subjects
+            if normalized_subjects.count(subject) > 1
+        })
+        signature_count = sum(
+            1 for item in inventory if item.get("signature_device_present") is True
+        )
+        if not inventory:
+            issues.append(
+                f"{runtime} Atelier doctrine violation: bespoke.scene_inventory is missing"
+            )
+        if duplicate_subjects:
+            issues.append(
+                f"{runtime} Atelier scene distinctness violation: repeated primary "
+                "subjects: " + ", ".join(duplicate_subjects)
+            )
+        if signature_count > 2:
+            issues.append(
+                f"{runtime} Atelier signature device appears in {signature_count} "
+                "scenes; maximum is 2"
+            )
+
+        workspace_exists: bool | None = None
+        if workspace_path is not None:
+            path = Path(workspace_path).expanduser()
+            if not path.is_absolute():
+                path = (Path(__file__).resolve().parents[2] / path).resolve()
+            else:
+                path = path.resolve()
+            workspace_exists = path.is_dir() and (path / "index.html").is_file()
+            if not workspace_exists:
+                issues.append(
+                    f"{runtime} Atelier workspace/index.html not found: {path}"
+                )
+
+        return {
+            "runtime": runtime,
+            "art_direction_declared": art_direction_declared,
+            "art_direction": str(art_direction) if art_direction else None,
+            "scene_inventory_count": len(inventory),
+            "duplicate_primary_subjects": duplicate_subjects,
+            "signature_device_scene_count": signature_count,
+            "workspace_exists": workspace_exists,
+            "scene_distinctness_failed": bool(
+                not inventory or duplicate_subjects or signature_count > 2
+            ),
+            "issues": issues,
+        }
 
     def _render_via_hyperframes(
         self,
@@ -1549,12 +2204,67 @@ class VideoCompose(BaseTool):
                 except Exception:
                     playbook_data = None
 
+        composition_mode = str(edit_decisions.get("composition_mode", "templated")).lower()
+        bespoke = edit_decisions.get("bespoke") or {}
+        if composition_mode == "atelier":
+            workspace_path = bespoke.get("workspace_path") or inputs.get("workspace_path")
+            atelier_checks = self._validate_bespoke_scene_inventory(
+                bespoke,
+                runtime="hyperframes",
+                workspace_path=workspace_path,
+            )
+            if atelier_checks["issues"]:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        "HyperFrames Atelier contract failed before render:\n"
+                        + "\n".join(f"  • {issue}" for issue in atelier_checks["issues"])
+                    ),
+                    data={"atelier_checks": atelier_checks},
+                )
+        else:
+            atelier_checks = None
+
+        if composition_mode == "atelier":
+            scene_plan = inputs.get("scene_plan") or {}
+            scenes = scene_plan.get("scenes", []) if isinstance(scene_plan, dict) else scene_plan
+            synthetic_cuts = [
+                {
+                    "id": scene.get("id", f"scene-{index}"),
+                    "source": "",
+                    "type": scene.get("type", "animation"),
+                    "in_seconds": scene.get("start_seconds", 0),
+                    "out_seconds": scene.get("end_seconds", 0),
+                    "motion_class": scene.get("motion_class"),
+                    "primary_subject": scene.get("primary_subject"),
+                    "visual_state_before": scene.get("visual_state_before"),
+                    "visual_action": scene.get("visual_action"),
+                    "visual_state_after": scene.get("visual_state_after"),
+                    "semantic_purpose": scene.get("semantic_purpose"),
+                    "approved_hold_reason": scene.get("approved_hold_reason"),
+                }
+                for index, scene in enumerate(scenes)
+            ]
+            hf_edit_decisions = dict(edit_decisions, cuts=synthetic_cuts)
+            if not hf_edit_decisions.get("total_duration_seconds"):
+                hf_edit_decisions["total_duration_seconds"] = max(
+                    (float(scene.get("end_seconds", 0) or 0) for scene in scenes),
+                    default=0,
+                )
+        else:
+            hf_edit_decisions = dict(edit_decisions, cuts=resolved_cuts)
+
+        # Use the QA-enriched contract for all remaining HyperFrames checks while
+        # leaving the hand-authored workspace itself untouched.
+        edit_decisions = hf_edit_decisions
+
         hf_inputs: dict[str, Any] = {
             "operation": "render",
             "workspace_path": workspace_path,
             "output_path": str(output_path),
-            "edit_decisions": dict(edit_decisions, cuts=resolved_cuts),
-            "asset_manifest": asset_manifest,
+            "edit_decisions": hf_edit_decisions,
+            "asset_manifest": asset_manifest or {"assets": []},
+            "strict": True,
         }
         if playbook_data:
             hf_inputs["playbook"] = playbook_data
@@ -1593,16 +2303,17 @@ class VideoCompose(BaseTool):
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
                 ),
+                semantic_visual_review_path=inputs.get("semantic_visual_review_path"),
             )
             if render_result.data is None:
                 render_result.data = {}
             render_result.data["final_review"] = final_review
             render_result.data["final_review_status"] = final_review["status"]
-            if final_review["status"] == "fail":
+            if final_review["status"] != "pass":
                 return ToolResult(
                     success=False,
                     error=(
-                        "Post-render self-review FAILED (HyperFrames). The output is not presentable.\n"
+                        f"Post-render self-review BLOCKED delivery (HyperFrames: {final_review['status']}).\n"
                         + "\n".join(f"  • {i}" for i in final_review.get("issues_found", []))
                     ),
                     data=render_result.data,
@@ -1653,16 +2364,17 @@ class VideoCompose(BaseTool):
                 script_text=inputs.get("script_text") or self._read_text_file(
                     inputs.get("script_path")
                 ),
+                semantic_visual_review_path=inputs.get("semantic_visual_review_path"),
             )
             if render_result.data is None:
                 render_result.data = {}
             render_result.data["final_review"] = final_review
             render_result.data["final_review_status"] = final_review["status"]
-            if final_review["status"] == "fail":
+            if final_review["status"] != "pass":
                 return ToolResult(
                     success=False,
                     error=(
-                        "Post-render self-review FAILED (FFmpeg). The output is not presentable.\n"
+                        f"Post-render self-review BLOCKED delivery (FFmpeg: {final_review['status']}).\n"
                         + "\n".join(f"  • {i}" for i in final_review.get("issues_found", []))
                     ),
                     data=render_result.data,
@@ -1700,15 +2412,22 @@ class VideoCompose(BaseTool):
         # Deep-copy props so we don't mutate the original
         props = json.loads(json.dumps(composition_data))
 
-        # Convert absolute file paths to file:// URIs for Remotion's
-        # Img and OffthreadVideo components
+        # Resolve source paths for Remotion's Img and OffthreadVideo components.
+        # Remotion serves files from remotion-composer/public/ via staticFile().
+        # Relative paths (e.g. "01-home.png") work via staticFile() in public/.
+        # Absolute paths must be converted to file:// URIs since Remotion's
+        # dev server can only serve files from public/.
+        # DO NOT resolve relative paths to absolute — that breaks staticFile().
         for cut in props.get("cuts", []):
             source = cut.get("source", "")
-            if source and not source.startswith(("http://", "https://", "file://")):
-                resolved = Path(source).resolve()
-                if resolved.exists():
-                    posix = resolved.as_posix()
-                    cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+            if not source or source.startswith(("http://", "https://", "file://")):
+                continue
+            resolved = Path(source).resolve()
+            if resolved.exists():
+                # Absolute path on disk — convert to file:// URI
+                posix = resolved.as_posix()
+                cut["source"] = f"file:///{posix}" if not posix.startswith("/") else f"file://{posix}"
+            # else: relative path — leave as-is for staticFile() in public/
 
         # Build a custom themeConfig from the playbook's actual colors.
         # This ensures every video gets a unique visual identity derived
@@ -1979,6 +2698,7 @@ class VideoCompose(BaseTool):
         proposal_packet: dict[str, Any] | None = None,
         narration_transcript_path: str | Path | None = None,
         script_text: str | None = None,
+        semantic_visual_review_path: str | Path | None = None,
     ) -> dict[str, Any]:
         """Run post-render self-review and produce a final_review artifact.
 
@@ -2076,55 +2796,312 @@ class VideoCompose(BaseTool):
 
         issues.extend(technical_probe.get("issues", []))
 
-        # --- 2. Visual spotcheck: sample 4 frames ---
+        # --- 2. Render-based visual QA ---------------------------------
+        # Inspect scene boundaries and a 2-FPS low-resolution stream. This turns
+        # motion/freeze/repetition checks into measurements of the rendered video
+        # rather than trusting declarations in the scene plan.
         visual_spotcheck: dict[str, Any] = {
             "frames_sampled": 0,
             "frame_paths": [],
+            "scene_boundary_frames": [],
+            "contact_sheet_path": None,
+            "sample_fps": 2.0,
+            "motion_frames_analyzed": 0,
+            "motion_coverage_ratio": 0.0,
+            "required_motion_coverage_ratio": 0.0,
+            "mean_frame_difference": 0.0,
+            "freeze_segments": [],
+            "repeated_layout_pairs": [],
             "black_frames_detected": False,
             "broken_overlays": False,
             "missing_assets": False,
             "unreadable_text": False,
+            "automated_text_collision_check": False,
             "issues": [],
         }
+        production_plan = (proposal_packet or {}).get("production_plan", {})
+        delivery_contract = (
+            (edit_decisions or {}).get("delivery_promise")
+            or (edit_decisions or {}).get("metadata", {}).get("delivery_promise")
+            or production_plan.get("delivery_promise")
+            or {}
+        )
+        quality_tier = (
+            production_plan.get("quality_tier")
+            or (edit_decisions or {}).get("metadata", {}).get("quality_tier")
+            or "standard"
+        )
+        quality_floor = delivery_contract.get("quality_floor", "presentable")
+        motion_required = bool(delivery_contract.get("motion_required"))
+        if quality_tier == "hero" or quality_floor == "broadcast":
+            required_rendered_motion_ratio = 0.65
+        elif motion_required and quality_floor != "draft":
+            required_rendered_motion_ratio = 0.40
+        else:
+            required_rendered_motion_ratio = 0.0
+        visual_spotcheck["required_motion_coverage_ratio"] = required_rendered_motion_ratio
+
+        approved_hold_windows: list[dict[str, Any]] = []
+        if edit_decisions:
+            for cut in edit_decisions.get("cuts", []) or []:
+                reason = cut.get("approved_hold_reason")
+                if cut.get("motion_class") == "static_hold" and reason:
+                    approved_hold_windows.append({
+                        "start": float(cut.get("in_seconds", 0) or 0),
+                        "end": float(cut.get("out_seconds", 0) or 0),
+                        "reason": str(reason),
+                    })
+
         duration = technical_probe.get("duration_seconds", 0)
         if duration > 0 and technical_probe.get("valid_container"):
             try:
+                from PIL import Image, ImageDraw
+                import numpy as np
+
                 frame_dir = output_path.parent / ".final_review_frames"
                 frame_dir.mkdir(parents=True, exist_ok=True)
-                # Sample at 10%, 35%, 65%, 90% of duration
-                sample_points = [0.10, 0.35, 0.65, 0.90]
-                frame_paths = []
-                for i, pct in enumerate(sample_points):
-                    ts = round(duration * pct, 2)
-                    frame_path = frame_dir / f"review_frame_{i}.png"
+
+                # Opening/middle/ending plus every scene boundary. Offset boundary
+                # samples slightly inward to avoid measuring a transition midpoint
+                # as the representative state of either scene.
+                timestamps: set[float] = {
+                    round(duration * 0.10, 3),
+                    round(duration * 0.35, 3),
+                    round(duration * 0.65, 3),
+                    round(duration * 0.90, 3),
+                }
+                boundary_timestamps: set[float] = set()
+                if edit_decisions:
+                    for cut in edit_decisions.get("cuts", []) or []:
+                        start = float(cut.get("in_seconds", 0) or 0)
+                        end = float(cut.get("out_seconds", start) or start)
+                        cut_duration = max(0.0, end - start)
+                        inward = min(0.10, cut_duration * 0.10)
+                        for raw in (start + inward, end - inward):
+                            ts = max(0.0, min(float(duration) - 0.02, raw))
+                            rounded = round(ts, 3)
+                            boundary_timestamps.add(rounded)
+                            timestamps.add(rounded)
+                ordered_timestamps = sorted(t for t in timestamps if 0 <= t < duration)
+                # Prevent pathological artifacts with thousands of micro-scenes.
+                if len(ordered_timestamps) > 120:
+                    step = max(1, len(ordered_timestamps) // 120)
+                    ordered_timestamps = ordered_timestamps[::step][:120]
+
+                frame_paths: list[str] = []
+                frame_records: list[tuple[str, float]] = []
+                boundary_paths: list[dict[str, Any]] = []
+                for i, ts in enumerate(ordered_timestamps):
+                    frame_path = frame_dir / f"review_{i:03d}_{ts:.3f}s.png"
                     cmd = [
                         "ffmpeg", "-y", "-ss", str(ts),
                         "-i", str(output_path),
                         "-frames:v", "1", "-q:v", "2",
                         str(frame_path),
                     ]
-                    subprocess.run(cmd, capture_output=True, timeout=15)
+                    subprocess.run(cmd, capture_output=True, timeout=60)
                     if frame_path.exists():
                         frame_paths.append(str(frame_path))
-
-                        # Check for black frames (file size heuristic:
-                        # a 1920x1080 PNG of pure black is ~5KB)
-                        if frame_path.stat().st_size < 2000:
-                            visual_spotcheck["black_frames_detected"] = True
+                        frame_records.append((str(frame_path), ts))
+                        if ts in boundary_timestamps:
+                            boundary_paths.append({"timestamp_seconds": ts, "path": str(frame_path)})
+                        with Image.open(frame_path) as image:
+                            rgb = np.asarray(image.convert("RGB").resize((64, 36)), dtype=np.float32)
+                            luminance = rgb.mean(axis=2) / 255.0
+                            if float(luminance.mean()) < 0.01 and float(luminance.std()) < 0.01:
+                                visual_spotcheck["black_frames_detected"] = True
 
                 visual_spotcheck["frames_sampled"] = len(frame_paths)
                 visual_spotcheck["frame_paths"] = frame_paths
+                visual_spotcheck["scene_boundary_frames"] = boundary_paths
+
+                # Contact sheet with timestamps for a human or vision-model pass.
+                if frame_paths:
+                    thumb_w, thumb_h = 320, 180
+                    columns = 4
+                    rows = (len(frame_paths) + columns - 1) // columns
+                    sheet = Image.new("RGB", (columns * thumb_w, rows * (thumb_h + 24)), "black")
+                    draw = ImageDraw.Draw(sheet)
+                    for i, (path, ts) in enumerate(frame_records):
+                        with Image.open(path) as image:
+                            image = image.convert("RGB")
+                            image.thumbnail((thumb_w, thumb_h))
+                            x = (i % columns) * thumb_w
+                            y = (i // columns) * (thumb_h + 24)
+                            sheet.paste(image, (x, y))
+                            draw.text((x + 5, y + thumb_h + 4), f"{ts:.2f}s", fill="white")
+                    contact_sheet = frame_dir / "contact_sheet.jpg"
+                    sheet.save(contact_sheet, quality=88)
+                    visual_spotcheck["contact_sheet_path"] = str(contact_sheet)
+
+                # Extract a contiguous low-res 2-FPS sequence for motion analysis.
+                motion_dir = frame_dir / "motion"
+                motion_dir.mkdir(parents=True, exist_ok=True)
+                for old in motion_dir.glob("motion_*.png"):
+                    old.unlink()
+                motion_cmd = [
+                    "ffmpeg", "-y", "-i", str(output_path),
+                    "-vf", "fps=2,scale=320:-2:flags=area",
+                    str(motion_dir / "motion_%06d.png"),
+                ]
+                subprocess.run(motion_cmd, capture_output=True, timeout=max(60, int(duration * 3)))
+                motion_paths = sorted(motion_dir.glob("motion_*.png"))
+                # Bound analysis memory while preserving the documented 2-FPS
+                # extraction. For very long videos, analyze an even sample.
+                if len(motion_paths) > 1800:
+                    stride = max(1, len(motion_paths) // 1800)
+                    motion_paths = motion_paths[::stride][:1800]
+
+                grayscale_frames: list[np.ndarray] = []
+                hashes: list[np.ndarray] = []
+                for path in motion_paths:
+                    with Image.open(path) as image:
+                        gray = np.asarray(image.convert("L").resize((64, 36)), dtype=np.float32) / 255.0
+                        grayscale_frames.append(gray)
+                        hash_gray = np.asarray(image.convert("L").resize((8, 8)), dtype=np.float32)
+                        hashes.append(hash_gray > hash_gray.mean())
+
+                visual_spotcheck["motion_frames_analyzed"] = len(grayscale_frames)
+                if len(grayscale_frames) >= 2:
+                    differences = [
+                        float(np.mean(np.abs(grayscale_frames[i] - grayscale_frames[i - 1])))
+                        for i in range(1, len(grayscale_frames))
+                    ]
+                    # Mean luminance difference is intentionally measured on a
+                    # 64×36 downsample. At this resolution, H.264 jitter in static
+                    # dark UI frames remains below 0.001 while controlled editorial
+                    # camera pushes cross it reliably.
+                    moving = _rendered_motion_mask(differences)
+                    eligible_indices = [
+                        i for i in range(len(moving))
+                        if not any(
+                            window["start"] <= ((i + 0.5) / 2.0) <= window["end"]
+                            for window in approved_hold_windows
+                        )
+                    ]
+                    rendered_motion_ratio = (
+                        sum(1 for i in eligible_indices if moving[i]) / len(eligible_indices)
+                        if eligible_indices
+                        else 1.0
+                    )
+                    visual_spotcheck["motion_coverage_ratio"] = round(rendered_motion_ratio, 3)
+                    visual_spotcheck["mean_frame_difference"] = round(float(np.mean(differences)), 5)
+
+                    # Freeze runs are consecutive sub-threshold differences. Five
+                    # differences at 2 FPS correspond to 2.5 seconds.
+                    freeze_segments: list[dict[str, Any]] = []
+                    run_start: int | None = None
+                    for i, is_moving in enumerate(moving):
+                        if not is_moving and run_start is None:
+                            run_start = i
+                        if (is_moving or i == len(moving) - 1) and run_start is not None:
+                            run_end = i if is_moving else i + 1
+                            freeze_duration = (run_end - run_start) / 2.0
+                            if freeze_duration >= 2.5:
+                                freeze_start = round(run_start / 2.0, 2)
+                                freeze_end = round(run_end / 2.0, 2)
+                                approved_window = next(
+                                    (
+                                        window for window in approved_hold_windows
+                                        if freeze_start >= window["start"] - 0.25
+                                        and freeze_end <= window["end"] + 0.25
+                                    ),
+                                    None,
+                                )
+                                freeze_segments.append({
+                                    "start_seconds": freeze_start,
+                                    "end_seconds": freeze_end,
+                                    "duration_seconds": round(freeze_duration, 2),
+                                    "approved": bool(approved_window),
+                                    "approved_hold_reason": (
+                                        approved_window["reason"] if approved_window else None
+                                    ),
+                                })
+                            run_start = None
+                    visual_spotcheck["freeze_segments"] = freeze_segments
+
+                    # Perceptual hashes reveal repeated templates between
+                    # different scenes. Frames within one scene are expected to
+                    # retain the same layout while the camera or focus state moves;
+                    # comparing them produced false positives for premium product
+                    # films with deliberate visual continuity.
+                    cut_windows: list[tuple[float, float, str]] = []
+                    if edit_decisions:
+                        for cut in edit_decisions.get("cuts", []) or []:
+                            cut_windows.append((
+                                float(cut.get("in_seconds", 0) or 0),
+                                float(cut.get("out_seconds", 0) or 0),
+                                str(cut.get("id") or ""),
+                            ))
+
+                    repeated_pairs: list[dict[str, Any]] = []
+                    for i in range(len(hashes)):
+                        first_seconds = i / 2.0
+                        first_cut_id = _timeline_scene_id(cut_windows, first_seconds)
+                        for j in range(i + 6, len(hashes)):
+                            second_seconds = j / 2.0
+                            second_cut_id = _timeline_scene_id(cut_windows, second_seconds)
+                            if (
+                                cut_windows
+                                and first_cut_id is not None
+                                and first_cut_id == second_cut_id
+                            ):
+                                continue
+                            distance = int(np.count_nonzero(hashes[i] != hashes[j]))
+                            if distance <= 2:
+                                repeated_pairs.append({
+                                    "first_seconds": round(first_seconds, 2),
+                                    "second_seconds": round(second_seconds, 2),
+                                    "first_scene_id": first_cut_id,
+                                    "second_scene_id": second_cut_id,
+                                    "hamming_distance": distance,
+                                })
+                                if len(repeated_pairs) >= 25:
+                                    break
+                        if len(repeated_pairs) >= 25:
+                            break
+                    visual_spotcheck["repeated_layout_pairs"] = repeated_pairs
 
                 if len(frame_paths) < 4:
                     visual_spotcheck["issues"].append(
-                        f"Only {len(frame_paths)}/4 frames extracted — some timestamps may be out of range"
+                        f"Only {len(frame_paths)} representative frames extracted"
                     )
                 if visual_spotcheck["black_frames_detected"]:
                     visual_spotcheck["issues"].append(
                         "Black frame detected — possible missing asset or failed render segment"
                     )
+                for freeze in visual_spotcheck["freeze_segments"]:
+                    if freeze.get("approved"):
+                        continue
+                    visual_spotcheck["issues"].append(
+                        "Freeze/non-semantic hold from "
+                        f"{freeze['start_seconds']:.2f}s to {freeze['end_seconds']:.2f}s "
+                        f"({freeze['duration_seconds']:.2f}s)"
+                    )
+                if (
+                    visual_spotcheck["motion_frames_analyzed"] < 2
+                    and required_rendered_motion_ratio > 0
+                ):
+                    visual_spotcheck["issues"].append(
+                        "Render-based motion analysis produced fewer than two frames"
+                    )
+                elif (
+                    visual_spotcheck["motion_coverage_ratio"]
+                    < required_rendered_motion_ratio
+                ):
+                    visual_spotcheck["issues"].append(
+                        "Rendered motion coverage "
+                        f"{visual_spotcheck['motion_coverage_ratio']:.0%} is below the "
+                        f"required {required_rendered_motion_ratio:.0%} for "
+                        f"quality_tier={quality_tier}, quality_floor={quality_floor}"
+                    )
+                if len(visual_spotcheck["repeated_layout_pairs"]) >= 8:
+                    visual_spotcheck["issues"].append(
+                        "Repeated-layout detector found at least 8 near-identical "
+                        "non-adjacent frame pairs; inspect the contact sheet for template repetition"
+                    )
             except Exception as e:
-                visual_spotcheck["issues"].append(f"Frame sampling error: {e}")
+                visual_spotcheck["issues"].append(f"Render-based visual QA error: {e}")
 
         issues.extend(visual_spotcheck.get("issues", []))
 
@@ -2135,8 +3112,26 @@ class VideoCompose(BaseTool):
             "unexpected_silence": False,
             "clipping_detected": False,
             "mix_intelligible": True,
+            "integrated_loudness_lufs": None,
+            "true_peak_db": None,
+            "loudness_range_lu": None,
+            "ducking_expected": False,
+            "ducking_configured": False,
             "issues": [],
         }
+        if edit_decisions:
+            audio_contract = edit_decisions.get("audio") or {}
+            narration_contract = audio_contract.get("narration") or {}
+            music_contract = audio_contract.get("music") or {}
+            audio_spotcheck["ducking_expected"] = bool(narration_contract and music_contract)
+            ducking = music_contract.get("ducking") if isinstance(music_contract, dict) else None
+            audio_spotcheck["ducking_configured"] = bool(
+                ducking is True or (isinstance(ducking, dict) and ducking.get("enabled", True))
+            )
+            if audio_spotcheck["ducking_expected"] and not audio_spotcheck["ducking_configured"]:
+                audio_spotcheck["issues"].append(
+                    "Narration and music are both present but audio.music.ducking is not enabled"
+                )
         if technical_probe.get("has_audio") and duration > 0:
             try:
                 # Use ffmpeg volumedetect to check audio levels
@@ -2181,18 +3176,62 @@ class VideoCompose(BaseTool):
                     audio_spotcheck["issues"].append(
                         f"Max volume {max_vol:.1f} dB — possible clipping"
                     )
+
+                # EBU R128-style loudness/true-peak measurement from loudnorm's
+                # first pass. This validates the delivered mix rather than only
+                # checking that an audio stream exists.
+                loudnorm_cmd = [
+                    "ffmpeg", "-i", str(output_path),
+                    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json",
+                    "-f", "null", "-",
+                ]
+                loudnorm_proc = subprocess.run(
+                    loudnorm_cmd, capture_output=True, text=True, timeout=120
+                )
+                loudnorm_text = loudnorm_proc.stderr or ""
+                json_start = loudnorm_text.rfind("{")
+                json_end = loudnorm_text.rfind("}")
+                if json_start >= 0 and json_end > json_start:
+                    metrics = json.loads(loudnorm_text[json_start:json_end + 1])
+                    integrated = float(metrics.get("input_i"))
+                    true_peak = float(metrics.get("input_tp"))
+                    loudness_range = float(metrics.get("input_lra"))
+                    audio_spotcheck["integrated_loudness_lufs"] = round(integrated, 2)
+                    audio_spotcheck["true_peak_db"] = round(true_peak, 2)
+                    audio_spotcheck["loudness_range_lu"] = round(loudness_range, 2)
+                    if true_peak > -1.0:
+                        audio_spotcheck["clipping_detected"] = True
+                        audio_spotcheck["issues"].append(
+                            f"True peak {true_peak:.1f} dBTP exceeds the -1.0 dBTP delivery ceiling"
+                        )
+                    if integrated < -24 or integrated > -10:
+                        audio_spotcheck["issues"].append(
+                            f"Integrated loudness {integrated:.1f} LUFS is outside the broad -24 to -10 LUFS delivery range"
+                        )
             except Exception as e:
                 audio_spotcheck["issues"].append(f"Audio analysis error: {e}")
 
         issues.extend(audio_spotcheck.get("issues", []))
 
         # --- 4. Promise preservation ---
+        review_video_category = str(
+            production_plan.get("video_category")
+            or (edit_decisions or {}).get("video_category")
+            or ""
+        ).strip()
         promise_preservation: dict[str, Any] = {
             "delivery_promise_honored": True,
             "silent_downgrade_detected": False,
             "runtime_swap_detected": False,
+            "video_category_used": review_video_category or None,
+            "category_contract_honored": True,
             "issues": [],
         }
+        if review_video_category and review_video_category != "overview-video":
+            promise_preservation["category_contract_honored"] = False
+            promise_preservation["issues"].append(
+                f"Unsupported active video_category {review_video_category!r}"
+            )
         if edit_decisions:
             renderer_family = edit_decisions.get("renderer_family", "")
             promise_preservation["renderer_family_used"] = renderer_family
@@ -2267,7 +3306,7 @@ class VideoCompose(BaseTool):
                             promise_preservation["issues"].append(v)
 
                     # Detect silent downgrade: motion-led promise but <50% motion
-                    if (delivery_data.get("type") == "motion_led"
+                    if (delivery_data.get("promise_type") == "motion_led"
                             and motion_ratio < 0.5):
                         promise_preservation["silent_downgrade_detected"] = True
                         promise_preservation["issues"].append(
@@ -2285,11 +3324,152 @@ class VideoCompose(BaseTool):
         subtitle_check: dict[str, Any] = {
             "subtitles_expected": False,
             "subtitles_present": False,
+            "layout_policy_declared": False,
+            "protected_regions_checked": False,
+            "occlusion_free": False,
+            "collision_count": 0,
+            "unicode_text_ok": True,
+            "visual_treatment_declared": False,
+            "caption_background_continuity": False,
+            "full_width_caption_bar_detected": False,
             "issues": [],
         }
         if edit_decisions:
             ed_subs = edit_decisions.get("subtitles", {})
             subtitle_check["subtitles_expected"] = bool(ed_subs.get("enabled"))
+            subtitle_check["visual_treatment_declared"] = ed_subs.get("visual_treatment") in {
+                "integrated-field", "local-pill", "surface"
+            }
+            declared_full_width = ed_subs.get("full_width_background") is True
+            subtitle_check["full_width_caption_bar_detected"] = declared_full_width
+            subtitle_check["caption_background_continuity"] = bool(
+                ed_subs.get("visual_treatment") == "integrated-field"
+                and not declared_full_width
+            )
+            subtitle_check["layout_policy_declared"] = ed_subs.get("layout_policy") in {
+                "reserved-rail", "adaptive-regions"
+            }
+            protected_regions = ed_subs.get("protected_regions") or []
+            subtitle_check["protected_regions_checked"] = bool(protected_regions)
+            subtitle_check["occlusion_free"] = bool(
+                subtitle_check["layout_policy_declared"]
+                and subtitle_check["protected_regions_checked"]
+            )
+            if subtitle_check["subtitles_expected"] and not subtitle_check["layout_policy_declared"]:
+                subtitle_check["issues"].append(
+                    "Subtitle layout policy is missing; visual occlusion was not governed"
+                )
+            if subtitle_check["subtitles_expected"] and not subtitle_check["protected_regions_checked"]:
+                subtitle_check["issues"].append(
+                    "Subtitle protected regions are missing; zero-overlap cannot be proven"
+                )
+
+            if subtitle_check["subtitles_expected"] and not subtitle_check["visual_treatment_declared"]:
+                subtitle_check["issues"].append(
+                    "Subtitle visual treatment is missing; geometry and appearance were not separated"
+                )
+
+            # Render-based full-width bar detection for integrated caption fields.
+            # Compare narrow strips at the reserved-field boundary across representative
+            # frames; a repeated abrupt dark full-width edge is evidence of a rail.
+            if (
+                review_video_category == "overview-video"
+                and ed_subs.get("layout_policy") == "reserved-rail"
+                and visual_spotcheck.get("frame_paths")
+            ):
+                try:
+                    from PIL import Image
+                    import numpy as np
+
+                    rail_ratio = float(ed_subs.get("reserved_rail_height_ratio") or 0)
+                    if not rail_ratio and ed_subs.get("reserved_rail_height_px"):
+                        rail_ratio = float(ed_subs["reserved_rail_height_px"]) / max(
+                            1.0, float(technical_probe.get("resolution", "0x1080").split("x")[-1])
+                        )
+                    detections = 0
+                    inspected = 0
+                    if 0.10 <= rail_ratio <= 0.30:
+                        for frame_path in visual_spotcheck["frame_paths"]:
+                            with Image.open(frame_path) as frame_image:
+                                rgb = np.asarray(
+                                    frame_image.convert("RGB").resize((320, 180)), dtype=np.float32
+                                )
+                            y = int(rgb.shape[0] * (1.0 - rail_ratio))
+                            if y < 10 or y >= rgb.shape[0] - 10:
+                                continue
+                            upper = rgb[y - 6:y].mean(axis=(0, 1))
+                            lower = rgb[y:y + 6].mean(axis=(0, 1))
+                            rail = rgb[y:].mean(axis=2)
+                            visual = rgb[:y].mean(axis=2)
+                            edge_delta = float(np.mean(np.abs(upper - lower)))
+                            rail_mean = float(rail.mean())
+                            visual_mean = float(visual.mean())
+                            inspected += 1
+                            if edge_delta > 22.0 and rail_mean + 12.0 < visual_mean:
+                                detections += 1
+                    detected = bool(inspected and detections >= max(2, int(inspected * 0.4)))
+                    subtitle_check["full_width_caption_bar_detected"] = detected or declared_full_width
+                    subtitle_check["caption_background_continuity"] = bool(
+                        subtitle_check["visual_treatment_declared"]
+                        and ed_subs.get("visual_treatment") == "integrated-field"
+                        and not subtitle_check["full_width_caption_bar_detected"]
+                    )
+                except Exception as exc:
+                    subtitle_check["caption_background_continuity"] = False
+                    subtitle_check["issues"].append(
+                        f"Caption background continuity analysis failed: {exc}"
+                    )
+
+            if review_video_category == "overview-video":
+                if ed_subs.get("visual_treatment") != "integrated-field":
+                    subtitle_check["issues"].append(
+                        "Overview-Video requires an integrated caption field"
+                    )
+                if subtitle_check["full_width_caption_bar_detected"]:
+                    subtitle_check["issues"].append(
+                        "Full-width caption bar detected; move meaningful graphics above "
+                        "the reading field and continue the scene background through it"
+                    )
+                if not subtitle_check["caption_background_continuity"]:
+                    subtitle_check["issues"].append(
+                        "Caption reading field does not preserve continuous scene background"
+                    )
+
+            try:
+                from lib.text_quality import iter_string_values, validate_display_text
+
+                language_code = ed_subs.get("language_code")
+                review_text = [script_text or ""]
+                review_text.extend(iter_string_values(edit_decisions.get("captions") or []))
+                text_issues = [
+                    issue
+                    for value in review_text
+                    for issue in validate_display_text(
+                        value, language_code=language_code
+                    )
+                ]
+                subtitle_check["unicode_text_ok"] = not text_issues
+                if text_issues:
+                    subtitle_check["issues"].append(
+                        "Viewer-facing text failed Unicode/German orthography lint: "
+                        + ", ".join(
+                            f"{issue.token!r}→{issue.replacement!r}"
+                            for issue in text_issues[:8]
+                        )
+                    )
+            except Exception as exc:
+                subtitle_check["unicode_text_ok"] = False
+                subtitle_check["issues"].append(
+                    f"Viewer-facing text quality check failed: {exc}"
+                )
+
+            rendered_captions = edit_decisions.get("captions", []) or []
+            if subtitle_check["subtitles_expected"] and rendered_captions:
+                # Remotion's CaptionOverlay burns the supplied caption words into
+                # the video, so no subtitle stream or external source file exists.
+                subtitle_check["subtitles_present"] = True
+                subtitle_check["coverage_ratio"] = 1.0
+                subtitle_check["render_mode"] = "burned_in_caption_overlay"
 
             # Check if output has subtitle stream
             if technical_probe.get("valid_container"):
@@ -2325,42 +3505,237 @@ class VideoCompose(BaseTool):
                 except Exception as e:
                     subtitle_check["issues"].append(f"Subtitle check error: {e}")
 
+        visual_spotcheck["automated_text_collision_check"] = bool(
+            subtitle_check.get("occlusion_free")
+        )
         issues.extend(subtitle_check.get("issues", []))
 
-        # --- 6. Transcript-vs-script comparison ---
-        # Catches content-level TTS failures (the classic "Chirp reads `...`
-        # as the word 'dot'" trap) that volume-based audio checks miss.
-        # Only runs when caller provides both the transcript and script; when
-        # skipped, issues list records that so the silence is visible.
+        # --- 6. Rendered-audio transcript vs source script ----------------
+        # Prefer transcribing the actual rendered output. A pre-render narration
+        # transcript cannot reveal truncation, wrong audio muxing, or render-time
+        # punctuation leaks.
+        transcript_path: Path | None = None
+        transcript_source = "unavailable"
+        transcript_generation_issue: str | None = None
+        if script_text and technical_probe.get("has_audio"):
+            try:
+                from tools.analysis.transcriber import Transcriber
+
+                transcript_dir = output_path.parent / ".final_review_transcript"
+                transcribe_result = Transcriber().execute({
+                    "input_path": str(output_path),
+                    "model_size": "base",
+                    "diarize": False,
+                    "output_dir": str(transcript_dir),
+                })
+                if transcribe_result.success and transcribe_result.artifacts:
+                    transcript_path = Path(transcribe_result.artifacts[0])
+                    transcript_source = "rendered_output"
+                else:
+                    transcript_generation_issue = (
+                        "Rendered transcript generation failed: "
+                        + str(transcribe_result.error or "unknown transcriber error")
+                    )
+            except Exception as e:
+                transcript_generation_issue = f"Rendered transcript generation failed: {e}"
+
+        if transcript_path is None and narration_transcript_path:
+            transcript_path = Path(narration_transcript_path)
+            transcript_source = "caller_provided_fallback"
+
         transcript_comparison = self._compare_transcript_to_script(
-            Path(narration_transcript_path) if narration_transcript_path else None,
+            transcript_path,
             script_text,
         )
+        transcript_comparison["transcript_source"] = transcript_source
+        transcript_comparison["transcript_path"] = (
+            str(transcript_path) if transcript_path else None
+        )
+        if transcript_generation_issue:
+            transcript_comparison.setdefault("issues", []).insert(
+                0, transcript_generation_issue
+            )
         issues.extend(transcript_comparison.get("issues", []))
 
-        # --- 7. Determine overall status ---
-        critical_issues = [
-            i for i in issues
-            if any(kw in i.lower() for kw in [
-                "silent downgrade", "delivery promise violation",
-                "effectively silent", "ffprobe failed", "suspiciously short",
-                "tts punctuation leak",  # reading literal punctuation aloud
-            ])
-        ]
+        # --- 7. Rendered semantic visual review ---------------------------
+        semantic_contract = (
+            production_plan.get("semantic_visual_review")
+            or (edit_decisions or {}).get("semantic_visual_review")
+            or (edit_decisions or {}).get("metadata", {}).get("semantic_visual_review")
+            or {}
+        )
+        semantic_required = bool(
+            isinstance(semantic_contract, dict) and semantic_contract.get("required")
+        )
+        configured_review_path = semantic_visual_review_path
+        if not configured_review_path and isinstance(semantic_contract, dict):
+            configured_review_path = semantic_contract.get("path")
+        semantic_visual_review: dict[str, Any] = {
+            "required": semantic_required,
+            "present": False,
+            "path": str(configured_review_path) if configured_review_path else None,
+            "status": "unavailable",
+            "gate_valid": False,
+            "human_approval_required": bool(
+                isinstance(semantic_contract, dict)
+                and semantic_contract.get("human_approval_required", False)
+            ),
+            "human_approval_status": "pending",
+            "issues": [],
+        }
+        if configured_review_path:
+            try:
+                from lib.visual_review_gate import validate_visual_review
+                from schemas.artifacts import validate_artifact
 
-        if critical_issues:
-            status = "revise"
-            recommended_action = "re_render"
-        elif issues:
-            status = "pass"
-            recommended_action = "present_to_user"
-        else:
-            status = "pass"
-            recommended_action = "present_to_user"
+                semantic_path = Path(str(configured_review_path)).expanduser()
+                if not semantic_path.is_file():
+                    raise FileNotFoundError(f"Semantic visual review not found: {semantic_path}")
+                semantic_data = json.loads(semantic_path.read_text(encoding="utf-8"))
+                canonical_data = {
+                    key: value for key, value in semantic_data.items()
+                    if key not in {"governance_gate", "automatic_loop_status"}
+                }
+                validate_artifact("visual_review", canonical_data)
+                gate = validate_visual_review(
+                    semantic_data,
+                    quality_tier=str(quality_tier),
+                    video_category=str(review_video_category),
+                    require_human_approval=bool(
+                        semantic_visual_review["human_approval_required"]
+                    ),
+                )
+                approval = semantic_data.get("human_approval") or {}
+                semantic_visual_review.update({
+                    "present": True,
+                    "status": semantic_data.get("status", "unavailable"),
+                    "gate_valid": bool(gate.get("valid")),
+                    "human_approval_status": approval.get("status", "pending"),
+                    "model": (semantic_data.get("reviewer") or {}).get("model"),
+                    "iteration": semantic_data.get("iteration"),
+                    "critical_count": gate.get("critical_count", 0),
+                    "high_count": gate.get("high_count", 0),
+                    "issues": list(gate.get("violations", [])),
+                    "warnings": list(gate.get("warnings", [])),
+                })
+            except Exception as exc:
+                semantic_visual_review["issues"].append(
+                    f"Semantic visual review validation failed: {exc}"
+                )
+        elif semantic_required:
+            semantic_visual_review["issues"].append(
+                "Rendered semantic visual review is required but no visual_review artifact was provided"
+            )
+
+        issues.extend(semantic_visual_review.get("issues", []))
+
+        # --- 8. Determine overall status ---
+        # `revise` is a blocking state in every render path. Build it from
+        # structured checks first, then from unmistakably critical messages.
+        critical_issues: list[str] = []
+
+        if not promise_preservation.get("delivery_promise_honored", True):
+            critical_issues.extend(promise_preservation.get("issues", []))
+        if promise_preservation.get("silent_downgrade_detected"):
+            critical_issues.extend(promise_preservation.get("issues", []))
+        if promise_preservation.get("runtime_swap_detected"):
+            critical_issues.extend(promise_preservation.get("issues", []))
+        if not promise_preservation.get("category_contract_honored", True):
+            critical_issues.extend(promise_preservation.get("issues", []))
+        if semantic_required and not semantic_visual_review.get("gate_valid"):
+            critical_issues.extend(semantic_visual_review.get("issues", []))
+        if visual_spotcheck.get("black_frames_detected"):
+            critical_issues.extend(visual_spotcheck.get("issues", []))
+        if visual_spotcheck.get("freeze_segments"):
+            critical_issues.extend(
+                i for i in visual_spotcheck.get("issues", [])
+                if "freeze/non-semantic hold" in i.lower()
+            )
+        if len(visual_spotcheck.get("repeated_layout_pairs", [])) >= 8:
+            critical_issues.extend(
+                i for i in visual_spotcheck.get("issues", [])
+                if "repeated-layout" in i.lower()
+            )
+        if audio_spotcheck.get("ducking_expected") and not audio_spotcheck.get("ducking_configured"):
+            critical_issues.extend(
+                i for i in audio_spotcheck.get("issues", [])
+                if "ducking" in i.lower()
+            )
+        if audio_spotcheck.get("clipping_detected"):
+            critical_issues.extend(
+                i for i in audio_spotcheck.get("issues", [])
+                if "peak" in i.lower() or "clipping" in i.lower()
+            )
+        audio_contract = (edit_decisions or {}).get("audio") or {}
+        audio_expected = bool(
+            audio_contract.get("narration")
+            or audio_contract.get("music")
+            or audio_contract.get("sfx")
+        )
+        if (
+            technical_probe.get("valid_container")
+            and not technical_probe.get("has_audio")
+            and audio_expected
+        ):
+            critical_issues.append("No audio stream in final output")
+        render_transcript_required = bool(
+            script_text
+            and audio_expected
+            and (quality_tier == "hero" or quality_floor == "broadcast")
+        )
+        if (
+            render_transcript_required
+            and transcript_comparison.get("transcript_source") != "rendered_output"
+        ):
+            critical_issues.append(
+                "Hero/broadcast final review requires a transcript generated from "
+                "the rendered output, but rendered-output transcription was unavailable"
+            )
+            critical_issues.extend(
+                i for i in transcript_comparison.get("issues", [])
+                if "rendered transcript generation failed" in i.lower()
+            )
+        if subtitle_check.get("subtitles_expected") and not subtitle_check.get("subtitles_present"):
+            critical_issues.extend(subtitle_check.get("issues", []))
+        if subtitle_check.get("subtitles_expected") and not subtitle_check.get("occlusion_free"):
+            critical_issues.extend(subtitle_check.get("issues", []))
+        if not subtitle_check.get("unicode_text_ok", True):
+            critical_issues.extend(subtitle_check.get("issues", []))
+        if review_video_category == "overview-video" and (
+            subtitle_check.get("full_width_caption_bar_detected")
+            or not subtitle_check.get("caption_background_continuity")
+            or not subtitle_check.get("visual_treatment_declared")
+        ):
+            critical_issues.extend(subtitle_check.get("issues", []))
+        if transcript_comparison.get("spurious_punctuation_words"):
+            critical_issues.extend(transcript_comparison.get("issues", []))
+
+        for issue in issues:
+            if any(kw in issue.lower() for kw in [
+                "effectively silent",
+                "ffprobe failed",
+                "suspiciously short",
+                "tts punctuation leak",
+                "duration drift",
+                "render-based visual qa error",
+                "motion analysis produced fewer than two frames",
+                "rendered motion coverage",
+                "audio analysis error",
+            ]):
+                critical_issues.append(issue)
+
+        # De-duplicate while preserving order for readable failure reports.
+        critical_issues = list(dict.fromkeys(critical_issues))
 
         if not technical_probe.get("valid_container"):
             status = "fail"
             recommended_action = "re_render"
+        elif critical_issues:
+            status = "revise"
+            recommended_action = "re_render"
+        else:
+            status = "pass"
+            recommended_action = "present_to_user"
 
         final_review = {
             "version": "1.0",
@@ -2373,6 +3748,7 @@ class VideoCompose(BaseTool):
                 "promise_preservation": promise_preservation,
                 "subtitle_check": subtitle_check,
                 "transcript_comparison": transcript_comparison,
+                "semantic_visual_review": semantic_visual_review,
             },
             "issues_found": issues,
             "recommended_action": recommended_action,
@@ -2586,9 +3962,10 @@ class VideoCompose(BaseTool):
         # Layer 2: edit_decisions subtitle style
         if edit_decisions:
             ed_style = edit_decisions.get("subtitles", {}).get("style", {})
-            for k, v in ed_style.items():
-                if v is not None:
-                    resolved[k] = v
+            if isinstance(ed_style, dict):
+                for k, v in ed_style.items():
+                    if v is not None:
+                        resolved[k] = v
 
         # Layer 3: Explicit override (highest priority)
         if explicit_style:

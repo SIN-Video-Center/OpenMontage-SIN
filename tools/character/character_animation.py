@@ -678,6 +678,7 @@ class CharacterRigRenderer(BaseTool):
 """
         composition_path = composition_dir / "character-scene.html"
         composition_path.write_text(composition_html, encoding="utf-8")
+        (workspace_path / "index.html").write_text(composition_html, encoding="utf-8")
         asset_id = "character_scene_hyperframes"
         asset_manifest = {
             "version": "1.0",
@@ -700,6 +701,20 @@ class CharacterRigRenderer(BaseTool):
             "version": "1.0",
             "render_runtime": "hyperframes",
             "renderer_family": "animation-first",
+            "composition_mode": "atelier",
+            "bespoke": {
+                "workspace_path": str(workspace_path),
+                "art_direction": "Hand-authored character animation via SVG rig + GSAP.",
+                "scene_inventory": [
+                    {
+                        "scene_id": "character-scene",
+                        "primary_subject": "character performance",
+                        "signature_device_present": True,
+                        "representative_frame": str(output_path),
+                    }
+                ],
+            },
+            "total_duration_seconds": total_duration,
             "cuts": [
                 {
                     "id": "character-scene",
@@ -755,6 +770,7 @@ class CharacterRigRenderer(BaseTool):
                 "version": "1.0",
                 "render_runtime": "ffmpeg",
                 "renderer_family": "animation-first",
+                "composition_mode": "templated",
                 "cuts": [
                     {
                         "id": "character-preview-cut",

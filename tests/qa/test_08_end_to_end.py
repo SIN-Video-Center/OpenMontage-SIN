@@ -203,7 +203,29 @@ proposal_packet = {
     "production_plan": {
         "pipeline": "animated-explainer",
         "playbook": "clean-professional",
+        "quality_tier": "standard",
+        "delivery_kind": "templated",
+        "motion_expectation": "motion_led",
+        "renderer_family": "explainer-data",
         "render_runtime": "remotion",
+        "composition_mode": "templated",
+        "delivery_promise": {
+            "promise_type": "data_explainer",
+            "motion_required": True,
+            "tone_mode": "educational",
+            "quality_floor": "presentable",
+        },
+        "taste_profile": {
+            "design_read": "Clean professional AI production explainer",
+            "visual_variance": 4,
+            "motion_intensity": 4,
+            "information_density": 5,
+            "palette_discipline": "Neutral system with one controlled accent",
+            "layout_variation": "Alternate process, comparison, and proof compositions",
+            "reference_strategy": "Use references to guide hierarchy without copying layouts",
+            "anti_patterns": ["generic AI gradients", "static slideshow pacing"],
+            "quality_gates": ["Every scene has meaningful visual change"],
+        },
         "stages": [
             {"stage": "script", "tools": [{"tool_name": "tts_selector", "role": "narration", "available": True}], "approach": "AI-written script with TTS narration"},
             {"stage": "scene_plan", "tools": [], "approach": "5 scenes with motion graphics"},
@@ -298,6 +320,9 @@ SCENE_TYPES = ["text_card", "diagram", "animation", "generated", "text_card"]
 scene_plan = {
     "version": "1.0",
     "style_playbook": "clean-professional",
+    "quality_tier": "standard",
+    "delivery_kind": "templated",
+    "motion_expectation": "motion_led",
     "scenes": [
         {
             "id": f"sc{i+1}",
@@ -306,6 +331,12 @@ scene_plan = {
             "start_seconds": start,
             "end_seconds": end,
             "script_section_id": sid,
+            "primary_subject": f"The {label.lower()} production concept",
+            "visual_state_before": f"The {label.lower()} idea is not yet visually established.",
+            "visual_action": f"Meaningful motion introduces and develops the {label.lower()} idea.",
+            "visual_state_after": f"The {label.lower()} idea is visually clear and ready for the next beat.",
+            "motion_class": "procedural_semantic_motion",
+            "semantic_purpose": f"Explain the {label.lower()} section through visible state change.",
             "required_assets": [
                 {"type": "narration", "description": f"TTS narration for {label}", "source": "generate"},
                 {"type": "image", "description": f"Visual for {label}", "source": "generate"},
@@ -424,13 +455,16 @@ for i, scene in enumerate(scene_plan["scenes"]):
 
 edit_decisions = {
     "version": "1.0",
+    "renderer_family": proposal_packet["production_plan"]["renderer_family"],
     "render_runtime": proposal_packet["production_plan"]["render_runtime"],
+    "composition_mode": proposal_packet["production_plan"]["composition_mode"],
     "cuts": [
         {
             "id": f"cut_{scene['id']}",
             "source": scene_videos[scene["id"]],
-            "in_seconds": 0,
-            "out_seconds": scene["end_seconds"] - scene["start_seconds"],
+            "in_seconds": scene["start_seconds"],
+            "out_seconds": scene["end_seconds"],
+            "source_in_seconds": 0,
             "speed": 1.0,
         }
         for scene in scene_plan["scenes"]
@@ -444,7 +478,17 @@ edit_decisions = {
     },
     "subtitles": {
         "enabled": True,
-        "style": "clean-professional",
+        "style": "phrase",
+        "position": "bottom-center",
+        "language_code": "en-US",
+        "unicode_normalization": "NFC",
+        "layout_policy": "adaptive-regions",
+        "preferred_zone": "bottom",
+        "fallback_zones": ["top"],
+        "safe_margin_px": 48,
+        "protected_regions": [],
+        "visual_treatment": "integrated-field",
+        "full_width_background": False,
     },
 }
 
@@ -507,7 +551,7 @@ compose_result = composer.execute({
     "operation": "compose",
     "edit_decisions": {
         "cuts": [
-            {"source": c["source"], "in_seconds": c["in_seconds"], "out_seconds": c["out_seconds"], "speed": c.get("speed", 1.0)}
+            {"source": c["source"], "in_seconds": c["in_seconds"], "out_seconds": c["out_seconds"], "source_in_seconds": c.get("source_in_seconds", 0), "speed": c.get("speed", 1.0)}
             for c in edit_decisions["cuts"]
         ],
     },

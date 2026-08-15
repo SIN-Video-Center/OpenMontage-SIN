@@ -63,6 +63,7 @@ class Transcriber(BaseTool):
             },
             "language": {"type": "string", "description": "ISO 639-1 language code, or null for auto-detect"},
             "diarize": {"type": "boolean", "default": False},
+            "force": {"type": "boolean", "default": False},
             "output_dir": {"type": "string", "description": "Directory for output files"},
         },
     }
@@ -119,11 +120,29 @@ class Transcriber(BaseTool):
         language = inputs.get("language")
         diarize = inputs.get("diarize", False)
         output_dir = Path(inputs.get("output_dir", input_path.parent))
+        force = bool(inputs.get("force", False))
 
         if not input_path.exists():
             return ToolResult(success=False, error=f"Input file not found: {input_path}")
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{input_path.stem}_transcript.json"
+        if (
+            not force
+            and output_path.is_file()
+            and output_path.stat().st_mtime >= input_path.stat().st_mtime
+        ):
+            try:
+                cached_data = json.loads(output_path.read_text(encoding="utf-8"))
+                if isinstance(cached_data, dict) and cached_data.get("word_timestamps") is not None:
+                    return ToolResult(
+                        success=True,
+                        data=cached_data,
+                        artifacts=[str(output_path)],
+                        duration_seconds=0.0,
+                    )
+            except (OSError, json.JSONDecodeError):
+                pass
 
         try:
             from faster_whisper import WhisperModel
@@ -201,7 +220,6 @@ class Transcriber(BaseTool):
         }
 
         # Write transcript JSON
-        output_path = output_dir / f"{input_path.stem}_transcript.json"
         output_path.write_text(json.dumps(result_data, indent=2), encoding="utf-8")
 
         return ToolResult(

@@ -117,6 +117,9 @@ def test_character_animation_smoke_flow(tmp_path):
 
     scene_plan = {
         "version": "1.0",
+        "quality_tier": "standard",
+        "delivery_kind": "templated",
+        "motion_expectation": "motion_led",
         "scenes": [
             {
                 "id": "scene-1",
@@ -125,6 +128,12 @@ def test_character_animation_smoke_flow(tmp_path):
                 "end_seconds": 4,
                 "description": "The mouse discovers a glowing seed while the bird reacts.",
                 "hero_moment": True,
+                "primary_subject": "mouse discovering a glowing seed",
+                "visual_state_before": "mouse is idle",
+                "visual_action": "mouse reacts to the seed, bird follows",
+                "visual_state_after": "both characters settle",
+                "motion_class": "character_motion",
+                "semantic_purpose": "reveal the inciting moment",
                 "character_actions": [
                     {
                         "character_id": "mouse_lead",
@@ -244,11 +253,20 @@ def test_character_renderer_can_handoff_to_video_compose(tmp_path, monkeypatch):
     pose_library = PoseLibraryBuilder().execute({"rig_plan": rig_plan}).data["pose_library"]
     scene_plan = {
         "version": "1.0",
+        "quality_tier": "standard",
+        "delivery_kind": "templated",
+        "motion_expectation": "motion_led",
         "scenes": [
             {
                 "id": "scene-1",
                 "type": "character_scene",
                 "description": "Mouse reacts to a tiny surprise.",
+                "primary_subject": "mouse reacting to surprise",
+                "visual_state_before": "mouse is idle",
+                "visual_action": "mouse reacts with surprise",
+                "visual_state_after": "mouse settles",
+                "motion_class": "character_motion",
+                "semantic_purpose": "show character emotion",
                 "start_seconds": 0,
                 "end_seconds": 1,
                 "character_actions": [
@@ -296,12 +314,63 @@ def test_character_renderer_can_handoff_to_video_compose(tmp_path, monkeypatch):
         lambda self, *args, **kwargs: {"status": "pass", "issues_found": []},
     )
     monkeypatch.setattr(HyperFramesCompose, "execute", fake_hyperframes_execute)
+    monkeypatch.setattr(
+        VideoCompose, "_pre_compose_validation", lambda *a, **k: None, raising=True
+    )
 
+    ed = render_result.data["edit_decisions"]
     compose_result = VideoCompose().execute(
         {
             "operation": "render",
+            "proposal_packet": {
+                "production_plan": {
+                    "render_runtime": "hyperframes",
+                    "composition_mode": "atelier",
+                    "renderer_family": "animation-first",
+                    "quality_tier": "standard",
+                    "delivery_kind": "bespoke",
+                    "motion_expectation": "motion_led",
+                    "art_direction": "character animation test",
+                    "delivery_promise": {
+                        "promise_type": "avatar_presenter",
+                        "motion_required": True,
+                        "tone_mode": "playful",
+                        "quality_floor": "presentable",
+                    },
+                    "taste_profile": {
+                        "design_read": "character animation test",
+                        "visual_variance": 3,
+                        "motion_intensity": 3,
+                        "information_density": 2,
+                        "palette_discipline": "neutral",
+                        "layout_variation": "character-focused",
+                        "reference_strategy": "none",
+                        "anti_patterns": ["generic gradients"],
+                        "quality_gates": ["character emotion reads clearly"],
+                    },
+                }
+            },
+            "scene_plan": {
+                "quality_tier": "standard",
+                "delivery_kind": "bespoke",
+                "motion_expectation": "motion_led",
+                "scenes": [
+                    {
+                        "id": "character-scene",
+                        "type": "character_scene",
+                        "start_seconds": 0,
+                        "end_seconds": ed["cuts"][0]["out_seconds"],
+                        "primary_subject": "character animation",
+                        "visual_state_before": "idle",
+                        "visual_action": "character performs action",
+                        "visual_state_after": "settles",
+                        "motion_class": "character_motion",
+                        "semantic_purpose": "character animation handoff",
+                    }
+                ],
+            },
             "asset_manifest": render_result.data["asset_manifest"],
-            "edit_decisions": render_result.data["edit_decisions"],
+            "edit_decisions": ed,
             "workspace_path": render_result.data["hyperframes_workspace"],
             "output_path": str(output_path),
             "skip_contrast": True,

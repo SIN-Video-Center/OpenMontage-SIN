@@ -4,50 +4,155 @@
   "title": "Asset Manifest",
   "description": "Inventory of generated/sourced assets produced by the Asset Generator.",
   "type": "object",
-  "required": ["version", "assets"],
+  "required": [
+    "version",
+    "assets"
+  ],
   "properties": {
-    "version": { "type": "string", "const": "1.0" },
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
     "assets": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "type", "path", "source_tool", "scene_id"],
+        "required": [
+          "id",
+          "type",
+          "path",
+          "source_tool",
+          "scene_id"
+        ],
         "properties": {
-          "id": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
           "type": {
             "type": "string",
-            "enum": ["image", "video", "audio", "narration", "music", "sfx", "diagram", "animation", "code_snippet", "subtitle", "font", "lut"]
+            "enum": [
+              "image",
+              "video",
+              "audio",
+              "narration",
+              "music",
+              "sfx",
+              "diagram",
+              "animation",
+              "code_snippet",
+              "subtitle",
+              "font",
+              "lut"
+            ]
           },
-          "path": { "type": "string", "description": "Relative path within the pipeline project directory" },
-          "source_tool": { "type": "string" },
-          "scene_id": { "type": "string" },
-          "prompt": { "type": "string", "description": "Generation prompt if AI-generated" },
-          "seed": { "type": "integer", "description": "Seed if applicable" },
-          "model": { "type": "string", "description": "Model used for generation" },
-          "cost_usd": { "type": "number", "minimum": 0 },
-          "duration_seconds": { "type": "number", "minimum": 0 },
-          "resolution": { "type": "string" },
-          "format": { "type": "string" },
-          "quality_score": { "type": "number", "minimum": 0, "maximum": 1 },
-          "subtype": { "type": "string", "description": "Sub-classification (e.g. 'background', 'stock', 'generated')" },
-          "generation_summary": { "type": "string", "description": "Brief summary of how the asset was generated or sourced" },
-          "provider": { "type": "string", "description": "Provider name (e.g. pixabay, google_imagen)" },
-          "license": { "type": "string", "description": "License type (e.g. Pixabay License, CC0)" },
-          "original_url": { "type": "string", "description": "Source URL if downloaded from a stock service" },
+          "path": {
+            "type": "string",
+            "description": "Relative path within the pipeline project directory"
+          },
+          "source_tool": {
+            "type": "string"
+          },
+          "scene_id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Generation prompt if AI-generated"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Seed if applicable"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model used for generation"
+          },
+          "cost_usd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "quality_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "subtype": {
+            "type": "string",
+            "description": "Sub-classification (e.g. 'background', 'stock', 'generated')"
+          },
+          "generation_summary": {
+            "type": "string",
+            "description": "Brief summary of how the asset was generated or sourced"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider name (e.g. pixabay, google_imagen)"
+          },
+          "license": {
+            "type": "string",
+            "description": "License type (e.g. Pixabay License, CC0)"
+          },
+          "original_url": {
+            "type": "string",
+            "description": "Source URL if downloaded from a stock service"
+          },
           "voice_performance": {
             "type": "object",
             "description": "Applied voice-performance contract for narration assets.",
             "properties": {
-              "source_section_id": { "type": "string" },
-              "delivery_cues_applied": { "type": "boolean" },
-              "provider_text_used": { "type": "boolean" },
+              "source_section_id": {
+                "type": "string"
+              },
+              "delivery_cues_applied": {
+                "type": "boolean"
+              },
+              "provider_text_used": {
+                "type": "boolean"
+              },
               "provider_settings": {
                 "type": "object",
                 "additionalProperties": true
               },
-              "sample_approved": { "type": "boolean" },
-              "sample_path": { "type": "string" },
-              "review_notes": { "type": "string" }
+              "sample_approved": {
+                "type": "boolean"
+              },
+              "sample_path": {
+                "type": "string"
+              },
+              "review_notes": {
+                "type": "string"
+              },
+              "pronunciation_guides_applied": {
+                "type": "boolean"
+              },
+              "pronunciation_verification_passed": {
+                "type": "boolean"
+              },
+              "pronunciation_review_transcript": {
+                "type": "string"
+              },
+              "display_text": {
+                "type": "string"
+              },
+              "spoken_text": {
+                "type": "string"
+              },
+              "expected_transcript_aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             },
             "additionalProperties": false
           }
@@ -55,8 +160,13 @@
         "additionalProperties": false
       }
     },
-    "total_cost_usd": { "type": "number", "minimum": 0 },
-    "metadata": { "type": "object" }
+    "total_cost_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "metadata": {
+      "type": "object"
+    }
   },
   "additionalProperties": false
 }

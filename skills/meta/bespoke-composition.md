@@ -6,7 +6,9 @@ look is written fresh so no two videos share a visual language.
 
 Read this whenever you've chosen **atelier mode** for a piece (see "When to use"). It does not
 hand you components — it routes you to the *principles, engine mechanics, and tool wiring* you
-need so that what you build is correct, and distinct.
+need so that what you build is correct, and distinct. For product/brand/launch hero work and every
+`overview-video`, also read **`skills/meta/product-film-art-direction.md`** and
+**`docs/PREMIUM_PRODUCT_FILM_STANDARD.md`** before scene authoring.
 
 > The single rule that governs everything below: **reuse engine knowledge, never creative
 > components.** How Remotion resolves an asset is engine knowledge — reuse it freely. How a
@@ -81,11 +83,38 @@ The reviewer enforces this as a "scene_distinctness" check (see
 each scene's primary subject + first frame, and an explicit answer to "do any two scenes
 share their primary visual subject?" Yes ⇒ CRITICAL ⇒ re-plan.
 
+For hero/product/overview work, scene planning also records the premium three-part contract from
+`product-film-art-direction.md`: `keyframe_contract`, `focus_path`, and `motion_hierarchy`. These are
+not prose garnish. They define the paused proof frame, the viewer's eye path, and the authored
+primary/secondary/ambient motion that the rendered critic will later inspect.
+
 The corollary: the per-scene plan is a *first-class artifact*, not implied. Write it down
 (in `art-direction.md` or a sibling `scenes.md`) before authoring `Composition.tsx`.
 
+### 1.75 Pass the static keyframe board before finishing motion
+
+For hero/product/overview work, author enough of each scene to render its declared proof state,
+then render a representative still per scene (two when the focal hierarchy changes materially).
+Review those stills as a board **before** polishing full animation.
+
+Block and recompose when a paused frame:
+
+- looks like a generic dashboard showcase, wireframe, template card stack, or debug UI;
+- has two equal-weight focal subjects without an explicit comparison purpose;
+- needs camera drift, glow or particles to feel finished;
+- repeats the same product-window silhouette/scale as neighboring scenes;
+- uses decorative chrome, frames or labels that add no meaning;
+- fails to make the spoken proof readable at delivery resolution.
+
+The rule is binding: **motion may animate a resolved hierarchy; it may not hide an unresolved one.**
+
 ### 2. Decide the motion language — principles, not presets
-Reach for **principle** skills, never finished animations:
+Reach for **principle** skills, never finished animations. For premium product work, author the
+motion hierarchy before individual tweens: one primary semantic event, subordinate camera/depth,
+near-invisible ambience, and a readable settle/proof state. Constant translate/scale through an
+entire scene is camera drift, not authored choreography.
+
+Then reach for:
 - **`framer-motion`** and **`lottie-bodymovin`** — Disney's 12 principles (anticipation, staging,
   follow-through, slow-in/out, arc, timing, exaggeration, appeal). Runtime-agnostic; apply the
   *principles* in your own Remotion `spring()`/`interpolate()` code.
@@ -185,6 +214,14 @@ edit_decisions = {
     "props_path": "<absolute path to artifacts/props.json>",
     "public_dir": "<absolute path to projects/<slug>/public/>",
     "art_direction": "<short note or path to art-direction.md — REQUIRED>",
+    "scene_inventory": [
+      {
+        "scene_id": "scene-01",
+        "primary_subject": "<unique subject for this scene>",
+        "signature_device_present": false,
+        "representative_frame": "projects/<slug>/snapshots/scene-01.png"
+      }
+    ],
     "scale": 0.5,          // 0.5 for a fast draft; drop for the 1080p final
     "crf": 18,             // crisp final
     "concurrency": 8
@@ -192,9 +229,15 @@ edit_decisions = {
 }
 ```
 
-No `asset_manifest` or `cuts` are required in atelier mode — the composition owns its own assets.
-The tool's `_run_atelier_checks` fails the render if any source file imports from the stock
-registry (`src/components`, `src/Explainer`, etc.), and warns if `art_direction` is missing.
+No `asset_manifest` or stock `cuts` are required in atelier mode, but `proposal_packet` and the complete `scene_plan` are mandatory for every render. The composition owns its assets while the pipeline retains the approved quality and visual-beat contract.
+
+The tool's `_run_atelier_checks` fails the render when:
+
+- any source file imports from the stock registry (`src/components`, `src/Explainer`, etc.),
+- `art_direction` is missing,
+- `scene_inventory` is missing,
+- two scenes reuse the same normalized `primary_subject`, or
+- the signature device appears in more than two scenes.
 
 #### HyperFrames path
 - Scaffold with `npx hyperframes init <slug>` (run from `projects/`). HF init generates
@@ -210,15 +253,20 @@ registry (`src/components`, `src/Explainer`, etc.), and warns if `art_direction`
   Snapshot is HF's native visual-spotcheck (contact-sheet of PNG frames at chosen
   timestamps) — use it the same way an atelier `final_review.visual_spotcheck` would.
 - **Render**: `npx hyperframes render . --output renders/<name>.mp4`.
-  > Known gap (F13): `hyperframes_compose.render` currently requires `edit_decisions.cuts[]`
-  > from the templated path. For hand-authored HF compositions it errors; call `npx` directly
-  > until the tool grows a bespoke branch.
+  `video_compose operation="render"` remains the final governed entry point so proposal preservation and post-render QA cannot be bypassed. Use direct `npx hyperframes` only for authoring-time lint, validate, snapshots, and local diagnostics.
 
 ## Guardrails so this doesn't backfire
 
 - **Distinctness review (replaces conformance review).** Before final render, ask: *could this be
   any other product's video? Does it reuse a look I've made before?* If yes, the art direction
   failed — return to step 1. This is the inverse of "does it match the reference."
+- **Static keyframe floor.** Every representative hero/overview proof frame must independently look
+  presentation-ready at full resolution. If a still fails, return to composition before motion polish.
+- **Surface-system coherence.** Reuse the project's own material rules across scenes (radius family,
+  edge treatment, elevation, glow, typography roles), but do not import a finished surface/component
+  from a prior hero project.
+- **Focus handoff.** Transitions must transfer attention between subjects. Do not use the same wipe,
+  glow sweep, zoom, or blur as automatic punctuation on every cut.
 - **No silent fallback to stock.** "Keep it simple" applies to *mechanics* (a 10-line spring is
   fine), never to *design* (simple ≠ reaching for `text_card`). If you catch yourself adding a
   stock `cut.type` to a hero piece, stop.
@@ -275,3 +323,17 @@ verification).
 See also: `skills/meta/animation-runtime-selector.md` (runtime + library routing),
 `AGENT_GUIDE.md` → "Composition Authoring Mode", `/hyperframes` (the HF router and
 capability map).
+
+## Caption-safe composition is mandatory
+
+Read `docs/CAPTION_AND_LANGUAGE_GOVERNANCE.md`. In Atelier work, captions are a
+layout region designed before scene authoring, not an overlay added at the end.
+Prefer `reserved-rail` for finals. Keep every scene's primary subject, labels,
+lines, controls, and animation paths outside that rail and declare them in
+`protected_regions`. When using `adaptive-regions`, both candidate zones must be
+planned; if neither is free, recompose the scene. Never lower opacity or cover a
+less-important graphic as a workaround.
+
+All viewer-facing copy must be Unicode NFC and linguistically correct. For German,
+write `wählen`, `souverän`, `eigenständig`, and `quellengestützt`. ASCII
+transliterations are critical defects and block render.

@@ -1,10 +1,10 @@
 # Prompt Gallery
 
-Tested prompts that produce impressive videos. Copy any prompt into your AI coding assistant after running `make setup`.
+Tested production prompts and demo briefs. Each one still passes through proposal-time quality/runtime/authoring-mode selection; a templated demo or still-led animatic is not automatically a hero final.
 
 ## Zero-Key Demos (instant, no API keys)
 
-These render pre-built compositions using only Remotion components — animated charts, typography, data visualization. No external services, no cost, no waiting.
+These render pre-built **templated Remotion demos** — useful for component verification, timing, data-series prototypes, and standard work. They demonstrate the scene stack; they are not evidence that the same stock grammar should be used for every hero film.
 
 ```bash
 make demo                         # Render all three demos
@@ -22,7 +22,7 @@ make demo                         # Render all three demos
 
 ## Zero-Key Prompts (free, works out of the box)
 
-These use the full agent pipeline — research, scripting, asset generation, composition — using only free tools (Piper TTS, stock media, Remotion).
+These use the full governed pipeline with free/local tools. The proposal classifies them as draft or standard unless a genuinely bespoke zero-key concept is approved; free tooling does not by itself justify a hero-quality claim.
 
 ### Data Explainer
 
@@ -74,7 +74,7 @@ Adding `FAL_KEY` to your `.env` unlocks FLUX image generation. These prompts com
 
 > "Make a product launch teaser for a fictional smart water bottle called AquaPulse. 45 seconds, modern and minimal, with AI-generated product shots."
 
-**What you get:** Cinematic product teaser with FLUX-generated visuals, stat reveals (hydration data), comparison cards, and a punchy closing.
+**What you get:** A low-cost product-teaser animatic/standard cut with generated product stills, camera-only motion, stat/comparison components, and exact rendered closing text. For a hero launch film, route the approved final to Remotion Atelier or HyperFrames Atelier and rebuild the scenes from a bespoke visual beat map.
 
 **Estimated time:** 12-18 minutes | **Cost:** ~$0.60
 
@@ -130,7 +130,7 @@ These use the **Animation pipeline** with `image_animation` approach — FLUX-ge
 
 These use the HyperFrames composition runtime — HTML + CSS + GSAP rendered deterministically to video via headless Chrome + FFmpeg. Perfect for kinetic typography, product promos, launch reels, and website-to-video treatments where the visual grammar is typographic and motion-first.
 
-**Requirements:** Node.js ≥ 22, FFmpeg, `npx` — no monorepo checkout, the CLI is fetched via `npx @hyperframes/cli` on first run.
+**Requirements:** Node.js ≥ 22, FFmpeg, `npx` — no monorepo checkout; the published CLI is fetched via `npx hyperframes`.
 
 ### Kinetic Product Launch
 
@@ -174,7 +174,7 @@ With video generation (Veo, Kling, Runway) + premium TTS (ElevenLabs) + music (S
 
 > "Make a 90-second animated explainer about quantum computing for middle school students. Use a fun narrator voice, custom soundtrack, and AI-generated visuals of qubits and quantum gates."
 
-**What you get:** Full production: ElevenLabs narration, FLUX visuals, Suno soundtrack, Remotion composition with animated charts and text overlays.
+**What you get:** Full governed production with premium narration/music and approved visual assets. The proposal chooses templated standard composition or bespoke Atelier based on the requested quality tier; premium providers do not make stock cards or still-image camera moves a hero final.
 
 **Estimated time:** 20-30 minutes | **Cost:** ~$2.00
 
@@ -218,9 +218,9 @@ With video generation (Veo, Kling, Runway) + premium TTS (ElevenLabs) + music (S
 
 **Request specific chart types.** The system has bar charts, line charts, pie/donut charts, KPI grids, progress bars, comparison cards, and callout boxes. Name the ones you want.
 
-**Ask for the zero-key path.** If you want free results, say "use only free tools" or "no paid APIs." The agent will route to Piper TTS, stock media, and Remotion-only compositions.
+**Ask for the zero-key path.** If you want free results, say "use only free tools" or "no paid APIs." The proposal will disclose the achievable quality tier and choose among local narration, open/source media, project-specific procedural Remotion/HyperFrames work, or a labeled animatic. It will not silently force every brief into a stock Remotion composition.
 
-**For anime/Ghibli-style videos,** mention the style explicitly: "Ghibli-style" or "anime-style." Describe the atmosphere, lighting, and mood. The agent uses the Animation pipeline with FLUX image generation and Remotion's anime scene engine — multi-image crossfade, camera motion, and particle overlays create the illusion of animation from still images. Cost is minimal (~$0.15 for 30 seconds).
+**For anime/Ghibli-inspired still-led videos,** describe atmosphere, lighting, shot variation, and mood. Multi-image crossfade, camera motion, and particles remain `camera_only`/decorative unless the visual states themselves change with the story. Label this route as a draft/standard image-animation treatment; use actual character/generated motion or bespoke procedural animation when the approved promise requires a true animated hero film.
 
 ---
 

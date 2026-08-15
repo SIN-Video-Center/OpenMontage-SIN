@@ -98,8 +98,8 @@ r1 = tool.execute({
     "operation": "compose",
     "edit_decisions": {
         "cuts": [
-            {"source": CLIP_A, "in_seconds": 0, "out_seconds": 5},
-            {"source": CLIP_B, "in_seconds": 0, "out_seconds": 5},
+            {"source": CLIP_A, "in_seconds": 0, "out_seconds": 5, "source_in_seconds": 0},
+            {"source": CLIP_B, "in_seconds": 5, "out_seconds": 10, "source_in_seconds": 0},
         ],
     },
     "audio_path": AUDIO_MIX,
@@ -115,8 +115,8 @@ r2 = tool.execute({
     "operation": "compose",
     "edit_decisions": {
         "cuts": [
-            {"source": CLIP_A, "in_seconds": 0, "out_seconds": 5},
-            {"source": CLIP_B, "in_seconds": 0, "out_seconds": 5},
+            {"source": CLIP_A, "in_seconds": 0, "out_seconds": 5, "source_in_seconds": 0},
+            {"source": CLIP_B, "in_seconds": 5, "out_seconds": 10, "source_in_seconds": 0},
         ],
     },
     "audio_path": AUDIO_MIX,
