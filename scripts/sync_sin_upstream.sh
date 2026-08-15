@@ -17,11 +17,7 @@ printf '%s\n' 'Fetching official upstream and fork...'
 git fetch upstream --prune
 git fetch origin --prune
 
-printf '%s\n' 'Fast-forwarding fork main from official upstream...'
-git push origin upstream/main:refs/heads/main
-git branch -f main upstream/main
-
-printf '%s\n' 'Merging upstream into sin/production...'
+printf '%s\n' 'Merging official upstream into sin/production...'
 git merge --no-edit upstream/main
 
 printf '%s\n' 'Running SIN extension and Overview contracts...'
@@ -35,7 +31,8 @@ python3 -m pytest -q \
   tests/tools/test_vercel_gateway_tts.py \
   tests/tools/test_voicebox_tts.py
 
-printf '%s\n' 'Pushing tested production branch...'
+printf '%s\n' 'Pushing tested production branch and advancing canonical main...'
 git push origin sin/production
+git push origin HEAD:refs/heads/main
 
-printf '%s\n' 'OpenMontage-SIN is synchronized.'
+printf '%s\n' 'OpenMontage is synchronized.'

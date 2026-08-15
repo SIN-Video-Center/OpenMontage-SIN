@@ -1,8 +1,8 @@
-# OpenMontage-SIN Fork Layout
+# OpenMontage Fork Layout
 
 ## Branches
 
-- `main` — clean mirror of `calesthio/OpenMontage:main`; no SIN feature commits.
+- `main` — canonical SIN branch, containing the merged `sin/production` extensions and upstream history.
 - `sin/production` — tested production branch containing the SIN platform extensions.
 - `sin/pre-upstream-20260802` — immutable pre-update recovery point.
 - `sin/core-snapshot-20260802` — original remote snapshot before the first upstream rebase.
@@ -10,13 +10,13 @@
 ## Remotes
 
 ```text
-origin   https://github.com/Delqhi/OpenMontage-SIN.git
+origin   https://github.com/SIN-Video-Center/OpenMontage.git
 upstream https://github.com/calesthio/OpenMontage.git
 ```
 
 ## Related repositories
 
-- `Delqhi/openmontage-overview-video` — private external Overview-Video plugin.
+- `SIN-Video-Center/openmontage-overview-video` — private Overview-Video plugin.
 - `Delqhi/openafd-overview-video` — private versioned OpenAfD production.
 
 ## Updating
