@@ -1,28 +1,28 @@
-"""Vercel AI Gateway text-to-speech provider with optional OmniRoute key pool.
+"""Vercel AI Gateway speech provider with OmniRoute credential-pool support.
 
-The provider keeps API credentials out of artifacts and logs. Authentication is
-resolved in this order:
+Speech is generated through Vercel's official AI SDK transport:
+``experimental_generateSpeech`` + ``gateway.speechModel(...)``. Credentials are
+resolved without exposing secret values in artifacts or process arguments:
 
-1. explicit ``api_key`` input (intended for short-lived CI injection),
+1. explicit runtime-only ``api_key`` input,
 2. ``AI_GATEWAY_API_KEY`` / ``VERCEL_AI_GATEWAY_API_KEY`` environment variable,
-3. active ``vercel-ai-gateway`` connections in OmniRoute's local SQLite store.
+3. active ``vercel-ai-gateway`` connections in OmniRoute's encrypted SQLite store.
 
-Only connection IDs are returned in metadata. Secret values are never surfaced.
+Only credential source and connection ID are returned as metadata.
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from lib.pronunciation import apply_pronunciation_guides
 from tools.base_tool import (
@@ -38,7 +38,8 @@ from tools.base_tool import (
     ToolTier,
 )
 
-DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1"
+RUNTIME_DIR = Path(__file__).resolve().parent / "vercel_gateway_runtime"
+RUNTIME_SCRIPT = RUNTIME_DIR / "generate.mjs"
 DEFAULT_OMNIROUTE_DB = Path.home() / ".omniroute" / "storage.sqlite"
 
 _MODEL_PRICING_PER_CHARACTER = {
@@ -53,6 +54,8 @@ _MODEL_VOICES = {
     "openai/tts-1-hd": {"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
 }
 
+_RETRYABLE_STATUS_CODES = {401, 402, 403, 408, 409, 429, 500, 502, 503, 504}
+
 
 @dataclass(frozen=True)
 class GatewayCredential:
@@ -63,19 +66,20 @@ class GatewayCredential:
 
 class VercelGatewayTTS(BaseTool):
     name = "vercel_gateway_tts"
-    version = "0.1.0"
+    version = "1.0.0"
     tier = ToolTier.VOICE
     capability = "tts"
     provider = "vercel-ai-gateway"
-    stability = ToolStability.BETA
+    stability = ToolStability.PRODUCTION
     execution_mode = ExecutionMode.SYNC
     determinism = Determinism.STOCHASTIC
     runtime = ToolRuntime.API
 
-    dependencies: list[str] = []
+    dependencies = ["binary:node"]
     install_instructions = (
-        "Configure AI_GATEWAY_API_KEY, VERCEL_AI_GATEWAY_API_KEY, or an active "
-        "vercel-ai-gateway connection in ~/.omniroute/storage.sqlite."
+        "Install Node.js >=22, run `npm install --prefix "
+        "tools/audio/vercel_gateway_runtime`, and configure an AI Gateway key "
+        "or active OmniRoute vercel-ai-gateway pool."
     )
     fallback_tools = ["openai_tts", "voicebox_tts", "piper_tts"]
     agent_skills = ["text-to-speech"]
@@ -95,17 +99,14 @@ class VercelGatewayTTS(BaseTool):
         "native_audio": True,
         "pronunciation_guides": True,
         "key_pool_rotation": True,
+        "official_ai_sdk_transport": True,
     }
     best_for = [
-        "fast production narration through a managed provider pool",
+        "fast production narration through a managed Vercel Gateway pool",
         "German overview-video narration with verified acronym pronunciation",
         "voice auditions across xAI Grok TTS and OpenAI TTS-1 HD",
     ]
-    not_good_for = [
-        "offline-only productions",
-        "voice cloning",
-        "zero-data-retention requirements for models that do not support ZDR",
-    ]
+    not_good_for = ["offline-only productions", "voice cloning"]
 
     input_schema = {
         "type": "object",
@@ -125,10 +126,7 @@ class VercelGatewayTTS(BaseTool):
             },
             "speed": {"type": "number", "default": 1.0, "minimum": 0.25, "maximum": 4.0},
             "language": {"type": "string", "default": "de"},
-            "instructions": {
-                "type": "string",
-                "description": "Delivery direction. Primarily supported by xai/grok-tts.",
-            },
+            "instructions": {"type": "string"},
             "pronunciation_guides": {
                 "type": "array",
                 "items": {
@@ -141,15 +139,16 @@ class VercelGatewayTTS(BaseTool):
                 },
             },
             "output_path": {"type": "string"},
-            "api_key": {"type": "string", "description": "Optional runtime-only key. Never returned."},
-            "base_url": {"type": "string", "default": DEFAULT_BASE_URL},
+            "api_key": {"type": "string", "description": "Runtime-only key; never logged or returned."},
+            "base_url": {"type": "string", "description": "Optional AI SDK Gateway base URL override."},
             "omniroute_db_path": {"type": "string"},
             "max_pool_attempts": {"type": "integer", "default": 6, "minimum": 1, "maximum": 20},
+            "timeout_seconds": {"type": "number", "default": 90, "minimum": 5, "maximum": 300},
         },
     }
 
     resource_profile = ResourceProfile(
-        cpu_cores=1, ram_mb=256, vram_mb=0, disk_mb=100, network_required=True
+        cpu_cores=1, ram_mb=384, vram_mb=0, disk_mb=100, network_required=True
     )
     retry_policy = RetryPolicy(
         max_retries=2,
@@ -157,18 +156,12 @@ class VercelGatewayTTS(BaseTool):
         retryable_errors=["rate_limit", "timeout", "gateway_error"],
     )
     idempotency_key_fields = [
-        "text",
-        "model",
-        "voice",
-        "response_format",
-        "speed",
-        "language",
-        "instructions",
-        "pronunciation_guides",
+        "text", "model", "voice", "response_format", "speed", "language",
+        "instructions", "pronunciation_guides",
     ]
     side_effects = [
         "writes audio file to output_path",
-        "calls Vercel AI Gateway",
+        "calls Vercel AI Gateway through the official AI SDK",
         "uses paid gateway credits",
     ]
     user_visible_verification = [
@@ -178,7 +171,13 @@ class VercelGatewayTTS(BaseTool):
     ]
 
     def get_status(self) -> ToolStatus:
-        return ToolStatus.AVAILABLE if self._credentials({}) else ToolStatus.UNAVAILABLE
+        runtime_ready = (
+            shutil.which("node") is not None
+            and RUNTIME_SCRIPT.is_file()
+            and (RUNTIME_DIR / "node_modules" / "ai" / "package.json").is_file()
+            and (RUNTIME_DIR / "node_modules" / "@ai-sdk" / "gateway" / "package.json").is_file()
+        )
+        return ToolStatus.AVAILABLE if runtime_ready and self._credentials({}) else ToolStatus.UNAVAILABLE
 
     def estimate_cost(self, inputs: dict[str, Any]) -> float:
         model = str(inputs.get("model", "xai/grok-tts"))
@@ -216,13 +215,11 @@ class VercelGatewayTTS(BaseTool):
     def _decrypt_omniroute_value(cls, stored: str, db_path: Path) -> str | None:
         if not stored.startswith("enc:v1:"):
             return stored
-
         secret = os.environ.get("STORAGE_ENCRYPTION_KEY") or cls._read_env_value(
             db_path.parent / ".env", "STORAGE_ENCRYPTION_KEY"
         )
         if not secret:
             return None
-
         parts = stored[len("enc:v1:"):].split(":")
         if len(parts) != 3:
             return None
@@ -238,10 +235,11 @@ class VercelGatewayTTS(BaseTool):
                 p=1,
                 dklen=32,
             )
-            iv = bytes.fromhex(iv_hex)
-            ciphertext = bytes.fromhex(ciphertext_hex)
-            tag = bytes.fromhex(tag_hex)
-            return AESGCM(key).decrypt(iv, ciphertext + tag, None).decode("utf-8")
+            return AESGCM(key).decrypt(
+                bytes.fromhex(iv_hex),
+                bytes.fromhex(ciphertext_hex) + bytes.fromhex(tag_hex),
+                None,
+            ).decode("utf-8")
         except Exception:
             return None
 
@@ -270,90 +268,58 @@ class VercelGatewayTTS(BaseTool):
         for connection_id, api_key in rows:
             stored = str(api_key or "").strip()
             value = cls._decrypt_omniroute_value(stored, db_path) if stored else None
-            if not value:
-                continue
-            credentials.append(
-                GatewayCredential(
-                    connection_id=str(connection_id),
-                    api_key=value,
-                    source="omniroute_pool",
-                )
-            )
+            if value:
+                credentials.append(GatewayCredential(str(connection_id), value, "omniroute_pool"))
         return credentials
 
     def _credentials(self, inputs: dict[str, Any]) -> list[GatewayCredential]:
         explicit = str(inputs.get("api_key") or "").strip()
         if explicit:
             return [GatewayCredential("runtime", explicit, "runtime_input")]
-
         for name in ("AI_GATEWAY_API_KEY", "VERCEL_AI_GATEWAY_API_KEY"):
             value = os.environ.get(name, "").strip()
             if value:
                 return [GatewayCredential(name.lower(), value, "environment")]
-
         configured = inputs.get("omniroute_db_path") or os.environ.get("OMNIROUTE_DB_PATH")
         db_path = Path(configured).expanduser() if configured else DEFAULT_OMNIROUTE_DB
         return self._omniroute_credentials(db_path)
 
     @staticmethod
-    def _audio_bytes(body: bytes, content_type: str | None) -> bytes:
-        ctype = (content_type or "").lower()
-        if "json" not in ctype:
-            return body
-
-        payload = json.loads(body.decode("utf-8"))
-        candidates: list[Any] = [
-            payload.get("audio"),
-            payload.get("b64_json"),
-            payload.get("data"),
-            payload.get("output"),
-        ]
-        for candidate in candidates:
-            if isinstance(candidate, dict):
-                candidate = candidate.get("audio") or candidate.get("b64_json") or candidate.get("data")
-            if isinstance(candidate, list) and candidate:
-                candidate = candidate[0]
-                if isinstance(candidate, dict):
-                    candidate = candidate.get("audio") or candidate.get("b64_json") or candidate.get("data")
-            if isinstance(candidate, str) and candidate:
-                if candidate.startswith("data:") and "," in candidate:
-                    candidate = candidate.split(",", 1)[1]
-                return base64.b64decode(candidate)
-        raise ValueError("Vercel AI Gateway returned JSON without base64 audio data")
-
-    @staticmethod
-    def _post(
+    def _generate_with_sdk(
         *,
-        base_url: str,
         api_key: str,
         payload: dict[str, Any],
         timeout: float,
-    ) -> tuple[bytes, str | None, dict[str, str]]:
-        request = urllib.request.Request(
-            f"{base_url.rstrip('/')}/audio/speech",
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json, audio/*",
-                "User-Agent": "OpenMontage/vercel-gateway-tts",
-            },
-            method="POST",
+    ) -> dict[str, Any]:
+        env = os.environ.copy()
+        env["AI_GATEWAY_API_KEY"] = api_key
+        env.pop("VERCEL_AI_GATEWAY_API_KEY", None)
+        process = subprocess.run(
+            [shutil.which("node") or "node", str(RUNTIME_SCRIPT)],
+            input=json.dumps(payload, ensure_ascii=False),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=RUNTIME_DIR,
+            env=env,
+            timeout=timeout,
+            check=False,
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            headers = {key.lower(): value for key, value in response.headers.items()}
-            return response.read(), response.headers.get("content-type"), headers
-
-    @staticmethod
-    def _safe_http_error(exc: urllib.error.HTTPError) -> str:
         try:
-            payload = json.loads(exc.read().decode("utf-8", errors="replace"))
-            error = payload.get("error", payload)
-            if isinstance(error, dict):
-                return str(error.get("message") or error.get("type") or "Gateway request failed")[:300]
-            return str(error)[:300]
-        except Exception:
-            return f"HTTP {exc.code}"
+            result = json.loads(process.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"AI SDK speech runtime returned invalid JSON: {(process.stderr or process.stdout)[:300]}"
+            ) from exc
+        if process.returncode != 0 or not result.get("success"):
+            status_code = result.get("statusCode")
+            message = str(result.get("error") or process.stderr or "AI Gateway speech generation failed")[:500]
+            error = RuntimeError(message)
+            setattr(error, "status_code", status_code)
+            setattr(error, "retryable", bool(result.get("retryable", status_code in _RETRYABLE_STATUS_CODES)))
+            raise error
+        return result
 
     def execute(self, inputs: dict[str, Any]) -> ToolResult:
         started = time.time()
@@ -374,53 +340,56 @@ class VercelGatewayTTS(BaseTool):
 
         spoken_text, applied = apply_pronunciation_guides(text, inputs.get("pronunciation_guides"))
         response_format = str(inputs.get("response_format", "wav"))
-        output_path = Path(inputs.get("output_path") or f"vercel_gateway_tts.{response_format}")
+        output_path = Path(inputs.get("output_path") or f"vercel_gateway_tts.{response_format}").resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         payload: dict[str, Any] = {
             "model": model,
-            "input": spoken_text,
+            "text": spoken_text,
             "voice": voice,
-            "response_format": response_format,
+            "outputFormat": response_format,
             "speed": float(inputs.get("speed", 1.0)),
+            "language": inputs.get("language", "de"),
+            "outputPath": str(output_path),
         }
-        if inputs.get("language"):
-            payload["language"] = inputs["language"]
-        if inputs.get("instructions") and model == "xai/grok-tts":
-            payload["instructions"] = inputs["instructions"]
+        if inputs.get("base_url"):
+            payload["baseURL"] = str(inputs["base_url"])
+        if inputs.get("instructions"):
+            payload["instructions"] = str(inputs["instructions"])
 
         credentials = self._credentials(inputs)
         if not credentials:
             return ToolResult(success=False, error="No Vercel AI Gateway credential available. " + self.install_instructions)
 
         max_attempts = min(int(inputs.get("max_pool_attempts", 6)), len(credentials))
-        base_url = str(inputs.get("base_url", DEFAULT_BASE_URL))
+        timeout = float(inputs.get("timeout_seconds", 90))
         errors: list[str] = []
         selected: GatewayCredential | None = None
-        response_headers: dict[str, str] = {}
+        sdk_result: dict[str, Any] = {}
 
         for credential in credentials[:max_attempts]:
             try:
-                body, content_type, response_headers = self._post(
-                    base_url=base_url,
+                sdk_result = self._generate_with_sdk(
                     api_key=credential.api_key,
                     payload=payload,
-                    timeout=float(inputs.get("timeout_seconds", 90)),
+                    timeout=timeout,
                 )
-                audio = self._audio_bytes(body, content_type)
-                if len(audio) < 64:
-                    raise ValueError("Gateway returned an implausibly small audio payload")
-                output_path.write_bytes(audio)
+                if not output_path.is_file() or output_path.stat().st_size < 64:
+                    raise RuntimeError("AI SDK returned an implausibly small or missing audio file")
                 selected = credential
                 break
-            except urllib.error.HTTPError as exc:
-                errors.append(f"{credential.connection_id}: HTTP {exc.code} {self._safe_http_error(exc)}")
-                if exc.code not in {401, 402, 403, 408, 409, 429, 500, 502, 503, 504}:
+            except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
+                status_code = getattr(exc, "status_code", None)
+                errors.append(
+                    f"{credential.connection_id}: "
+                    f"{('HTTP ' + str(status_code) + ' ') if status_code else ''}{str(exc)[:240]}"
+                )
+                retryable = bool(getattr(exc, "retryable", True))
+                if not retryable:
                     break
-            except (urllib.error.URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError) as exc:
-                errors.append(f"{credential.connection_id}: {type(exc).__name__}: {str(exc)[:200]}")
 
         if selected is None:
+            output_path.unlink(missing_ok=True)
             return ToolResult(
                 success=False,
                 error="Vercel AI Gateway TTS failed across the credential pool: " + " | ".join(errors[:max_attempts]),
@@ -431,35 +400,46 @@ class VercelGatewayTTS(BaseTool):
 
         try:
             from tools.analysis.audio_probe import probe_duration
-
             duration = probe_duration(output_path)
         except Exception:
             duration = None
 
-        cost = self.estimate_cost({**inputs, "text": text, "model": model})
+        response = sdk_result.get("response") or {}
+        provider_metadata = sdk_result.get("providerMetadata") or {}
+        generation_id = None
+        if isinstance(provider_metadata, dict):
+            gateway_meta = provider_metadata.get("gateway") or {}
+            if isinstance(gateway_meta, dict):
+                generation_id = gateway_meta.get("generationId") or gateway_meta.get("id")
+
         return ToolResult(
             success=True,
             data={
                 "provider": self.provider,
+                "transport": "vercel-ai-sdk-gateway-speech-v4",
                 "model": model,
+                "resolved_model": response.get("modelId") or model,
                 "voice": voice,
                 "language": inputs.get("language", "de"),
-                "format": response_format,
+                "format": sdk_result.get("format") or response_format,
+                "media_type": sdk_result.get("mediaType"),
                 "speed": float(inputs.get("speed", 1.0)),
-                "instructions": inputs.get("instructions") if model == "xai/grok-tts" else None,
+                "instructions": inputs.get("instructions"),
                 "display_text": text,
                 "spoken_text": spoken_text,
                 "pronunciation_guides_applied": applied,
                 "text_length": len(spoken_text),
                 "audio_duration_seconds": round(duration, 3) if duration else None,
+                "audio_bytes": output_path.stat().st_size,
                 "output": str(output_path),
                 "credential_source": selected.source,
                 "credential_connection_id": selected.connection_id,
-                "gateway_request_id": response_headers.get("x-vercel-id") or response_headers.get("x-request-id"),
+                "gateway_generation_id": generation_id,
                 "pool_attempt_count": len(errors) + 1,
+                "warnings": sdk_result.get("warnings") or [],
             },
             artifacts=[str(output_path)],
-            cost_usd=cost,
+            cost_usd=self.estimate_cost({**inputs, "text": text, "model": model}),
             duration_seconds=round(time.time() - started, 2),
             model=model,
         )

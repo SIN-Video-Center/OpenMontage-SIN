@@ -1,0 +1,13 @@
+{
+  "name": "openmontage-vercel-gateway-tts-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "4.0.37",
+    "ai": "7.0.48"
+  }
+}
