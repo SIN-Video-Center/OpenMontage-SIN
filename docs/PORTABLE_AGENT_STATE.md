@@ -1,6 +1,6 @@
-# Portable OpenMontage Agent State
+# Portable OpenMontage-SIN Agent State
 
-The canonical cross-machine state for OpenMontage lives in Git:
+The canonical cross-machine state for OpenMontage-SIN lives in Git:
 
 - production code, skills, contracts, and runbooks
 - `remotion-composer/artifacts/visual-design/motion-proofs/` visual proof artifacts
@@ -11,4 +11,4 @@ The following files are machine-local runtime databases and are intentionally no
 - `.sin/context.db`
 - `sin_goal_mode.db`
 
-They are currently empty local SQLite stores and must not be used as the only source of project memory. Agents on another Mac should clone `https://github.com/SIN-Video-Center/OpenMontage.git` and use the tracked code, docs, tests, and visual proofs. Secrets, cookies, tokens, provider credentials, and host-specific runtime state remain outside Git.
+They are currently empty local SQLite stores and must not be used as the only source of project memory. Agents on another Mac should clone `https://github.com/SIN-Video-Center/OpenMontage-SIN.git` and use the tracked code, docs, tests, and visual proofs. Secrets, cookies, tokens, provider credentials, and host-specific runtime state remain outside Git.

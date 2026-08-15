@@ -17,7 +17,7 @@ printf '%s\n' 'Fetching official upstream and fork...'
 git fetch upstream --prune
 git fetch origin --prune
 
-printf '%s\n' 'Merging official upstream into sin/production...'
+printf '%s\n' 'Merging official upstream into OpenMontage-SIN main...'
 git merge --no-edit upstream/main
 
 printf '%s\n' 'Running SIN extension and Overview contracts...'
@@ -34,4 +34,4 @@ python3 -m pytest -q \
 printf '%s\n' 'Pushing tested canonical main...'
 git push origin main
 
-printf '%s\n' 'OpenMontage is synchronized.'
+printf '%s\n' 'OpenMontage-SIN is synchronized with upstream.'

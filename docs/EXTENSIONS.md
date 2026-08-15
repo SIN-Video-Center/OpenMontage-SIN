@@ -1,6 +1,6 @@
 # External Extensions
 
-OpenMontage supports external extension roots so category-specific workflows can live outside the core fork and survive upstream updates.
+OpenMontage-SIN supports external extension roots so category-specific workflows can live outside the core fork and survive upstream updates.
 
 ## Registration
 
@@ -27,17 +27,17 @@ Core pipeline manifests are searched first, followed by enabled extension roots.
 ## Update workflow
 
 1. Commit and push all work on a SIN feature branch.
-2. Keep `origin` pointed at `SIN-Video-Center/OpenMontage` and `upstream` at `calesthio/OpenMontage`.
+2. Keep `origin` pointed at `SIN-Video-Center/OpenMontage-SIN` and `upstream` at `calesthio/OpenMontage`.
 3. Fast-forward the fork's clean `main` from `upstream/main`.
 4. Rebase or merge the SIN production branch onto the updated `main`.
 5. Run core contract tests and each registered plugin's tests.
 6. Render the reference production and inspect final audio plus representative frames.
 
-External plugins and product-owned production workspaces are not touched by an OpenMontage core update. Product-specific films belong to their product repositories; a separate production repository is not required by the extension architecture.
+External plugins and product-owned production workspaces are not touched by an OpenMontage-SIN core update. Product-specific films belong to their product repositories; a separate production repository is not required by the extension architecture.
 
 ## Current repositories
 
-- Core fork: `SIN-Video-Center/OpenMontage`
+- Core fork: `SIN-Video-Center/OpenMontage-SIN`
 - Overview plugin: `Delqhi/openmontage-overview-video`
 - Example product-owned production workspace: `OpenAfD-Chat/tooling/video/openafd-chat-overview/`
 
