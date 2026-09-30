@@ -1,0 +1,13 @@
+{
+  "1": {
+    "class_type": "SINOmniRouteVideo",
+    "inputs": {
+      "alias": "video_quality_candidate",
+      "prompt": "SIN OmniRoute video generation",
+      "aspect_ratio": "16:9",
+      "resolution": "1280x720",
+      "duration": 5,
+      "reference_urls_json": "[]"
+    }
+  }
+}
